@@ -1,35 +1,345 @@
-/* Phone layout for the Android build (and any narrow window).
-   Loaded last so it only overrides what the desktop styles set. */
+/* Android build: fixed one-screen layout and a deeper dark theme.
+   Everything is scoped to .arnis-android (set by js/android.js), except the generic
+   narrow-window rules at the end, so the desktop app keeps its own look. */
 
-/* ---------- Android-only tweaks (any screen size) ---------- */
-.arnis-android #format-bedrock,
-.arnis-android #format-luanti {
-  display: none !important;
+/* ---------- Dark palette ---------- */
+:root.arnis-android {
+  --a-bg: #0e1014;
+  --a-panel: #171a20;
+  --a-panel-2: #1f232b;
+  --a-border: #2b313b;
+  --a-text: #e7e9ec;
+  --a-muted: #98a1ad;
+  --a-accent: #fecc44;
+  --a-accent-soft: rgba(254, 204, 68, 0.14);
+  --a-green: #59c96b;
+
+  /* Variables the original settings page and dialogs read */
+  --ui-bg: #13161b;
+  --ui-sidebar: #0e1014;
+  --ui-card: #1b1f26;
+  --ui-card-border: #2b313b;
+  --ui-tile: #222731;
+  --ui-tile-hover: #2a303b;
+  --ui-tile-border: #333a46;
+  --ui-field: #12151a;
+  --ui-field-border: #3a414d;
+  --ui-text: #e7e9ec;
+  --ui-muted: #a2abb7;
+  --ui-faint: #7d8693;
+
+  color: var(--a-text);
+  background-color: var(--a-bg);
+  color-scheme: dark;
 }
 
-.arnis-android #format-java {
-  flex: 1;
-  border-radius: 8px;
+.arnis-android body {
+  background: var(--a-bg);
+  color: var(--a-text);
+  -webkit-tap-highlight-color: transparent;
 }
 
-/* Upstream update notices point to desktop downloads. */
+.arnis-android p {
+  color: var(--a-text);
+}
+
+/* ---------- One screen, no page scroll ---------- */
+.arnis-android,
+.arnis-android body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+.arnis-android .container {
+  height: 100dvh;
+  padding: max(6px, env(safe-area-inset-top)) 10px max(8px, env(safe-area-inset-bottom));
+  gap: 8px;
+}
+
+.arnis-android .container > .row {
+  display: none; /* the big logo: the map gets the space instead */
+}
+
 .arnis-android .footer {
   display: none;
 }
 
+.arnis-android .flex-container {
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+/* Map on top, taking whatever the panel leaves */
+.arnis-android .map-box {
+  position: relative;
+  width: 100%;
+  min-height: 0;
+  flex: 1 1 auto;
+  border-radius: 14px;
+  background: var(--a-panel);
+  border: 1px solid var(--a-border);
+  box-shadow: none;
+}
+
+.arnis-android .controls-box {
+  width: 100%;
+  flex: 0 0 auto;
+  min-height: 0;
+}
+
+.arnis-android .android-hidden {
+  display: none !important;
+}
+
+/* ---------- Panel under the map ---------- */
+#android-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+}
+
+/* 1. Java Edition */
+.android-java {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  background: var(--a-panel);
+  border: 1px solid var(--a-border);
+}
+
+.android-java-icon {
+  font-size: 1.35em;
+}
+
+.android-java-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+  flex: 1;
+}
+
+.android-java-text b {
+  color: var(--a-text);
+  font-size: 0.98em;
+}
+
+.android-java-text small {
+  color: var(--a-muted);
+  font-size: 0.78em;
+}
+
+.android-java-check {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--a-accent);
+  color: #1c1c1c;
+  font-weight: 700;
+  font-size: 0.85em;
+}
+
+/* 2. Quick settings */
+#android-panel button {
+  margin: 0;
+}
+
+.arnis-android .controls-box button.quick-chip.android-more {
+  width: 100% !important;
+  min-width: 0;
+  height: auto;
+  border-style: solid;
+  color: var(--a-text);
+  background: var(--a-panel-2);
+}
+
+.arnis-android .controls-box button.quick-chip.android-more svg {
+  width: 20px;
+  height: 20px;
+}
+
+.quick-chips {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.arnis-android .controls-box button.quick-chip {
+  width: 100%;
+  max-width: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 48px;
+  padding: 5px 2px;
+  border-radius: 12px;
+  background: var(--a-panel);
+  border: 1px solid var(--a-border);
+  color: var(--a-muted);
+  font-size: 0.74em;
+  line-height: 1.1;
+  box-shadow: none;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.quick-chip-icon {
+  font-size: 1.35em;
+  filter: grayscale(1);
+  opacity: 0.55;
+}
+
+.arnis-android .controls-box button.quick-chip.on {
+  background: var(--a-accent-soft);
+  border-color: rgba(254, 204, 68, 0.7);
+  color: var(--a-text);
+}
+
+.quick-chip.on .quick-chip-icon {
+  filter: none;
+  opacity: 1;
+}
+
+.arnis-android .controls-box button.quick-chip.always {
+  border-style: dashed;
+}
+
+.arnis-android .controls-box button.quick-chip.disabled {
+  opacity: 0.4;
+}
+
+/* 3. Area details */
+.android-area {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--a-panel);
+  border: 1px solid var(--a-border);
+  min-height: 40px;
+  justify-content: center;
+}
+
+.android-area .area-main {
+  color: var(--a-text);
+  font-size: 1.02em;
+}
+
+.android-area .area-main b {
+  color: var(--a-accent);
+}
+
+.android-area .area-sub,
+.android-area .area-empty {
+  color: var(--a-muted);
+  font-size: 0.82em;
+}
+
+.android-area .area-warn {
+  color: #ffb74d;
+  font-size: 0.8em;
+}
+
+.arnis-android #android-panel .bbox-selection-text {
+  display: none; /* the details box already tells the user what is selected */
+}
+
+/* 4. Progress */
+.arnis-android #android-panel .progress-section {
+  margin: 0;
+  padding: 0 2px;
+  gap: 2px;
+}
+
+.arnis-android #android-panel .progress-row {
+  margin: 0;
+}
+
+.arnis-android #android-panel .progress-info-text:empty {
+  display: none;
+}
+
+.arnis-android #android-panel .progress-info-text {
+  font-size: 0.8em;
+  color: var(--a-muted);
+}
+
+.arnis-android .progress-bar-container {
+  background: var(--a-panel-2);
+  border-radius: 999px;
+}
+
+.arnis-android .secret-parrot {
+  display: none !important;
+}
+
+/* 5. Generate button */
+.arnis-android #android-panel .start-button-wrap {
+  width: 100%;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0;
+}
+
+.arnis-android #android-panel .world-name-row {
+  background: transparent !important;
+  color: var(--a-muted);
+}
+
+.arnis-android #android-panel .start-button {
+  width: 100%;
+  min-height: 56px;
+  border-radius: 14px;
+  background: var(--a-accent);
+  color: #1c1c1c;
+  font-size: 1.12em;
+  font-weight: 700;
+  border: none;
+  box-shadow: 0 6px 18px rgba(254, 204, 68, 0.22);
+}
+
+.arnis-android #android-panel .start-button:active {
+  transform: scale(0.99);
+  background: #f0bd34;
+}
+
+.arnis-android #android-panel .world-name-row {
+  justify-content: center;
+  margin-top: 2px;
+  font-size: 0.78em;
+  min-height: 0;
+}
+
+/* ---------- "World ready" notice over the map ---------- */
 .android-saved {
   display: none;
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
+  z-index: 1000;
   flex-direction: column;
   gap: 4px;
-  margin-top: 10px;
-  padding: 12px 14px;
-  border-radius: 10px;
-  background: rgba(76, 175, 80, 0.16);
-  border: 1px solid rgba(76, 175, 80, 0.55);
-  color: #ececec;
+  padding: 12px 40px 12px 14px;
+  border-radius: 12px;
+  background: rgba(20, 40, 24, 0.96);
+  border: 1px solid rgba(89, 201, 107, 0.6);
+  color: var(--a-text, #ececec);
   text-align: left;
-  font-size: 0.92em;
+  font-size: 0.9em;
   word-break: break-word;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
 }
 
 .android-saved strong {
@@ -42,120 +352,124 @@
   font-size: 0.9em;
 }
 
-/* ---------- Narrow screens: stack map and controls ---------- */
+.android-saved .android-saved-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 30px !important;
+  height: 30px;
+  padding: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--a-muted, #aaa);
+  font-size: 1em;
+  box-shadow: none;
+}
+
+/* ---------- Settings page and dialogs on a phone ---------- */
+.arnis-android .settings-page {
+  flex-direction: column;
+}
+
+.arnis-android .settings-sidebar {
+  width: 100%;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: max(8px, env(safe-area-inset-top)) 10px 8px;
+  border-right: none;
+  border-bottom: 1px solid var(--a-border);
+}
+
+.arnis-android .settings-brand {
+  display: none;
+}
+
+.arnis-android .settings-nav {
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.arnis-android .settings-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.arnis-android .settings-page .settings-nav-item {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.arnis-android .settings-row {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* The label keeps a readable width; wide controls drop to their own line. */
+.arnis-android .settings-row .setting-label,
+.arnis-android .settings-row .setting-text {
+  flex: 1 1 170px;
+  min-width: 0;
+}
+
+.arnis-android .settings-row .settings-control {
+  flex: 0 1 auto;
+  max-width: 100%;
+}
+
+.arnis-android .settings-row .segmented-control {
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+
+.arnis-android .modal-content,
+.arnis-android .dialog {
+  width: calc(100vw - 24px) !important;
+  max-width: calc(100vw - 24px) !important;
+  max-height: calc(100dvh - 24px);
+  box-sizing: border-box;
+}
+
+/* Java only on Android */
+.arnis-android #format-bedrock,
+.arnis-android #format-luanti {
+  display: none !important;
+}
+
+/* Very short screens (small phones, landscape): tighter panel */
+@media (max-height: 700px) {
+  .arnis-android .quick-chips {
+    grid-template-columns: repeat(8, 1fr);
+  }
+
+  .arnis-android .controls-box button.quick-chip .quick-chip-label {
+    display: none;
+  }
+
+  .arnis-android .controls-box button.quick-chip {
+    min-height: 40px;
+  }
+
+  .android-java {
+    padding: 6px 10px;
+  }
+
+  .android-java-text small {
+    display: none;
+  }
+}
+
+/* ---------- Narrow desktop windows (not Android) ---------- */
 @media (max-width: 760px) {
-  html, body {
-    height: 100%;
-    overflow: hidden;
-  }
-
-  .container {
-    height: 100dvh;
-    padding: max(6px, env(safe-area-inset-top)) 10px max(8px, env(safe-area-inset-bottom));
-  }
-
-  .logo {
-    height: 2.6em;
-    padding: 0.1em 0 0.2em;
-  }
-
-  #arnis-logo {
-    width: auto !important;
-    max-width: 55vw;
-  }
-
-  .flex-container {
-    flex-direction: column;
-    gap: 10px;
-    min-height: 0;
-    margin-top: 2px;
-  }
-
-  .map-box {
-    width: 100%;
-    min-height: 0;
-    flex: 1 1 auto;
-  }
-
-  .controls-box {
-    width: 100%;
-    flex: 0 0 auto;
-    max-height: 46dvh;
-    overflow-y: auto;
-  }
-
-  .controls-content {
-    height: auto;
-    gap: 8px;
-  }
-
-  .bbox-selection-text {
-    font-size: 0.85em;
-  }
-
-  /* Big, thumb-friendly start button */
-  .start-button {
-    min-height: 54px;
-    font-size: 1.05em;
-  }
-
-  .preview3d-mini {
-    max-height: 120px;
-  }
-
-  .footer {
-    display: none;
-  }
-
-  /* Dialogs never wider than the screen */
-  .modal-content,
-  .dialog {
-    width: calc(100vw - 24px) !important;
-    max-width: calc(100vw - 24px) !important;
-    max-height: calc(100dvh - 24px);
-    box-sizing: border-box;
-  }
-
-  /* ---------- Settings: sidebar becomes a top strip ---------- */
-  .settings-page {
+  :root:not(.arnis-android) .flex-container {
     flex-direction: column;
   }
 
-  .settings-sidebar {
+  :root:not(.arnis-android) .map-box,
+  :root:not(.arnis-android) .controls-box {
     width: 100%;
-    flex-direction: row;
-    align-items: center;
-    gap: 8px;
-    padding: max(8px, env(safe-area-inset-top)) 10px 8px;
-    border-right: none;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.25);
-  }
-
-  .settings-brand {
-    display: none;
-  }
-
-  .settings-nav {
-    display: flex;
-    flex-direction: row;
-    gap: 4px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-  }
-
-  .settings-nav::-webkit-scrollbar {
-    display: none;
-  }
-
-  .settings-page .settings-nav-item {
-    flex: 0 0 auto;
-    white-space: nowrap;
-  }
-
-  .settings-row {
-    flex-wrap: wrap;
-    gap: 8px;
   }
 }
