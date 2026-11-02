@@ -2111,7 +2111,12 @@ $(document).ready(function () {
             }).addTo(map);
 
             applyBboxFromParent([lat - dLat, lng - dLng, lat + dLat, lng + dLng]);
-            map.fitBounds([[lat - dLat, lng - dLng], [lat + dLat, lng + dLng]], { padding: [30, 30] });
+            // On Android the controls sheet covers the lower half of the map: keep the
+            // area in the visible top half.
+            var bottomPad = /Android/i.test(navigator.userAgent) ? Math.round(map.getSize().y * 0.5) : 30;
+            map.fitBounds([[lat - dLat, lng - dLng], [lat + dLat, lng + dLng]], {
+                paddingTopLeft: [30, 70], paddingBottomRight: [30, bottomPad]
+            });
             toast('📍 Área de unos 300 m alrededor de ti. Ajusta las esquinas si quieres más o menos.');
         }
 

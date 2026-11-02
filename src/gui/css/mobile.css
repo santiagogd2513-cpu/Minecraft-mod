@@ -65,30 +65,83 @@
   display: none;
 }
 
+.arnis-android .container {
+  padding: 0;
+}
+
 .arnis-android .flex-container {
-  flex-direction: column;
-  gap: 8px;
+  position: relative;
+  display: block;
   margin: 0;
   min-height: 0;
   flex: 1 1 auto;
+  overflow: hidden;
 }
 
-/* Map on top, taking whatever the panel leaves */
+/* The map always fills the screen; the controls slide over it. */
 .arnis-android .map-box {
-  position: relative;
-  width: 100%;
+  position: absolute;
+  inset: 0;
+  width: auto;
   min-height: 0;
-  flex: 1 1 auto;
-  border-radius: 14px;
+  border-radius: 0;
   background: var(--a-panel);
-  border: 1px solid var(--a-border);
+  border: none;
   box-shadow: none;
 }
 
+/* Bottom sheet with the controls */
 .arnis-android .controls-box {
-  width: 100%;
-  flex: 0 0 auto;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1100;
+  width: auto;
   min-height: 0;
+  padding: 0 10px max(10px, env(safe-area-inset-bottom));
+  background: var(--a-bg);
+  border-top: 1px solid var(--a-border);
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.45);
+  transform: translateY(0);
+  transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+  touch-action: none;
+  will-change: transform;
+}
+
+.arnis-android .controls-box.sheet-dragging {
+  transition: none;
+}
+
+/* Handle and the one-line summary shown when the sheet is down */
+.sheet-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0 2px;
+  cursor: grab;
+  user-select: none;
+}
+
+.sheet-handle {
+  width: 44px;
+  height: 5px;
+  border-radius: 999px;
+  background: #4a515c;
+}
+
+.sheet-peek {
+  display: none;
+  color: var(--a-text);
+  font-size: 0.88em;
+  text-align: center;
+  padding-bottom: 6px;
+}
+
+.sheet-collapsed .sheet-peek {
+  display: block;
 }
 
 .arnis-android .android-hidden {
@@ -327,7 +380,7 @@
   position: absolute;
   left: 10px;
   right: 10px;
-  bottom: 10px;
+  top: calc(64px + env(safe-area-inset-top));
   z-index: 1000;
   flex-direction: column;
   gap: 4px;

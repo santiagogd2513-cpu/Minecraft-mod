@@ -3,7 +3,9 @@
 // Loaded (not deferred) before main.js so it can prepare localStorage before main.js
 // reads it. Android is detected from the WebView user agent, which is synchronous.
 //
-// On Android the screen is rebuilt as a fixed, non-scrolling layout:
+// On Android the map fills the screen and the controls live in a bottom sheet:
+// swipe the sheet down to see the whole map, swipe it up (or tap the handle) to get the
+// options and the generate button back. Sheet contents:
 //
 //   ┌──────────────────────────┐
 //   │           map            │
@@ -181,6 +183,131 @@
       box.innerHTML = html;
       lastDetails = html;
     }
+    if (!generating) {
+      setPeek(b ? "📐 " + box.querySelector(".area-main b").textContent + " seleccionados · desliza para generar"
+                : "Desliza hacia arriba para ver las opciones");
+    }
+  }
+
+  // ---------- Bottom sheet ----------
+
+  let generating = false;
+
+  function setPeek(text) {
+    const el = document.getElementById("sheet-peek-text");
+    if (el && el.textContent !== text) el.textContent = text;
+  }
+
+  function sheetEl() {
+    return document.querySelector(".controls-box");
+  }
+
+  // Height of the part that stays visible when the sheet is down (handle + summary).
+  function peekHeight() {
+    const head = document.getElementById("sheet-head");
+    return head ? head.offsetHeight + 8 : 56;
+  }
+
+  function maxOffset(sheet) {
+    return Math.max(0, sheet.offsetHeight - peekHeight());
+  }
+
+  function setCollapsed(collapsed) {
+    const sheet = sheetEl();
+    if (!sheet) return;
+    sheet.classList.toggle("sheet-collapsed", collapsed);
+    sheet.style.transform = collapsed ? "translateY(" + maxOffset(sheet) + "px)" : "translateY(0px)";
+    const handle = document.getElementById("sheet-head");
+    if (handle) handle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+  }
+
+  function setupSheet(sheet) {
+    let startY = 0, startOffset = 0, lastY = 0, lastT = 0, velocity = 0;
+    let tracking = false, dragging = false, justDragged = false, pointerId = null;
+    let capturedEarly = false;
+
+    sheet.addEventListener("pointerdown", function (e) {
+      if (e.button !== undefined && e.button !== 0) return;
+      tracking = true;
+      dragging = false;
+      pointerId = e.pointerId;
+      startY = lastY = e.clientY;
+      lastT = performance.now();
+      velocity = 0;
+      startOffset = sheet.classList.contains("sheet-collapsed") ? maxOffset(sheet) : 0;
+      // When the sheet is down only its small top bar is visible, and the finger soon
+      // leaves it for the map frame, which would swallow the rest of the gesture.
+      // Capture right away; the only control there is the handle, handled below.
+      capturedEarly = startOffset > 0;
+      if (capturedEarly) {
+        try { sheet.setPointerCapture(e.pointerId); } catch (err) { capturedEarly = false; }
+      }
+    });
+
+    sheet.addEventListener("pointermove", function (e) {
+      if (!tracking || e.pointerId !== pointerId) return;
+      const dy = e.clientY - startY;
+      if (!dragging) {
+        if (Math.abs(dy) < 10) return;
+        dragging = true;
+        sheet.classList.add("sheet-dragging");
+        try { sheet.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+      }
+      const now = performance.now();
+      velocity = (e.clientY - lastY) / Math.max(1, now - lastT);
+      lastY = e.clientY;
+      lastT = now;
+      const off = Math.min(maxOffset(sheet), Math.max(0, startOffset + dy));
+      sheet.style.transform = "translateY(" + off + "px)";
+      e.preventDefault();
+    });
+
+    function end(e) {
+      if (!tracking || (e && e.pointerId !== pointerId)) return;
+      tracking = false;
+      if (!dragging) {
+        if (capturedEarly) {
+          // A tap on the collapsed bar opens the sheet.
+          justDragged = true;
+          setCollapsed(false);
+        }
+        return;
+      }
+      dragging = false;
+      justDragged = true;
+      sheet.classList.remove("sheet-dragging");
+      const m = maxOffset(sheet);
+      const current = Math.min(m, Math.max(0, startOffset + (lastY - startY)));
+      // A quick flick wins; otherwise go to whichever side is closer.
+      let collapse = current > m / 2;
+      if (velocity > 0.5) collapse = true;
+      if (velocity < -0.5) collapse = false;
+      setCollapsed(collapse);
+    }
+    sheet.addEventListener("pointerup", end);
+    sheet.addEventListener("pointercancel", end);
+
+    // A drag must not also press the button it started on.
+    sheet.addEventListener("click", function (e) {
+      if (justDragged) {
+        justDragged = false;
+        e.stopPropagation();
+        e.preventDefault();
+      }
+    }, true);
+
+    const head = document.getElementById("sheet-head");
+    if (head) {
+      head.addEventListener("click", function () {
+        setCollapsed(!sheet.classList.contains("sheet-collapsed"));
+      });
+    }
+
+    // Keep the collapsed position right when the screen size changes.
+    window.addEventListener("resize", function () {
+      setCollapsed(sheet.classList.contains("sheet-collapsed"));
+    });
+    setCollapsed(false);
   }
 
   // ---------- "World ready" notice (over the map, so the panel never grows) ----------
@@ -259,7 +386,16 @@
       startLabel.textContent = "⛏️ Generar mundo";
     }
 
-    panel.append(javaRow, chips, details);
+    // Handle at the top of the sheet: drag or tap it. The summary line shows while
+    // the sheet is down.
+    const head = document.createElement("div");
+    head.id = "sheet-head";
+    head.className = "sheet-head";
+    head.setAttribute("role", "button");
+    head.setAttribute("aria-label", "Mostrar u ocultar las opciones");
+    head.innerHTML = '<span class="sheet-handle"></span><span id="sheet-peek-text" class="sheet-peek"></span>';
+
+    panel.append(head, javaRow, chips, details);
     if (info) panel.appendChild(info);
     if (progress) panel.appendChild(progress);
     if (start) panel.appendChild(start);
@@ -271,6 +407,7 @@
     controls.appendChild(panel);
 
     refreshDetails();
+    setupSheet(controls);
   }
 
   document.addEventListener("DOMContentLoaded", function () {
@@ -291,11 +428,16 @@
     const tauri = window.__TAURI__;
     if (tauri && tauri.event && tauri.event.listen) {
       tauri.event.listen("show-in-folder", function (event) {
+        generating = false;
         showSavedNotice(String(event.payload || ""));
       });
       // Hide the notice again when a new generation starts reporting progress.
       tauri.event.listen("progress-update", function (event) {
         const p = event.payload && event.payload.progress;
+        if (typeof p === "number" && p >= 0) {
+          generating = p < 100;
+          setPeek(p < 100 ? "⛏️ Generando mundo… " + Math.round(p) + "%" : "✅ Mundo generado");
+        }
         const box = document.getElementById("android-saved");
         if (box && typeof p === "number" && p >= 0 && p < 5) box.style.display = "none";
       });
