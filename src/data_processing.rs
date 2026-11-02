@@ -2521,6 +2521,9 @@ pub fn generate_world_with_options(
 
     // For Bedrock format, emit event to open the mcworld file
     if world_format == WorldFormat::BedrockMcWorld {
+        #[cfg(target_os = "android")]
+        emit_show_in_folder(&crate::android::friendly_path(&output_path));
+        #[cfg(not(target_os = "android"))]
         if let Some(path_str) = output_path.to_str() {
             emit_show_in_folder(path_str);
         }

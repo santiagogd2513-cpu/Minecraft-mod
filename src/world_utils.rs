@@ -33,6 +33,12 @@ pub fn replace_file_atomically(path: &Path, bytes: &[u8]) -> Result<(), String> 
 
 /// The Desktop, else home, for .mcworld output. Only names it, so it asks no permission.
 pub fn default_bedrock_output_directory() -> PathBuf {
+    // On Android .mcworld files go next to the Java worlds, in Download/Arnis.
+    #[cfg(target_os = "android")]
+    {
+        return crate::android::default_saves_dir();
+    }
+    #[allow(unreachable_code)]
     dirs::desktop_dir()
         .or_else(dirs::home_dir)
         .unwrap_or_else(|| PathBuf::from("."))
@@ -40,6 +46,11 @@ pub fn default_bedrock_output_directory() -> PathBuf {
 
 /// The first writable of Desktop, Documents, Downloads and home for .mcworld output.
 pub fn get_bedrock_output_directory() -> PathBuf {
+    #[cfg(target_os = "android")]
+    {
+        return crate::android::default_saves_dir();
+    }
+    #[allow(unreachable_code)]
     [
         dirs::desktop_dir(),
         dirs::document_dir(),

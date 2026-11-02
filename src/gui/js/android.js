@@ -10,7 +10,7 @@
 //   ┌──────────────────────────┐
 //   │           map            │
 //   ├──────────────────────────┤
-//   │ ☕ Mundo para Java Edition │
+//   │ [ ☕ Java | 🧱 Bedrock ]   │
 //   │ quick settings (chips)    │
 //   │ area details (km², size)  │
 //   │ progress                  │
@@ -29,8 +29,9 @@
     // This is an unofficial personal build: never send telemetry to the upstream
     // project and don't ask about it on first run.
     localStorage.setItem("telemetry-consent", "false");
-    // Java Edition only on this build.
-    localStorage.setItem("arnis-world-format", "java");
+    // Java Edition by default; Bedrock is one tap away in the panel.
+    const fmt = localStorage.getItem("arnis-world-format");
+    if (fmt !== "java" && fmt !== "bedrock") localStorage.setItem("arnis-world-format", "java");
   } catch (e) {
     console.warn("localStorage unavailable:", e);
   }
@@ -334,8 +335,9 @@
     where.textContent = "Guardado en: " + path;
     const hint = document.createElement("span");
     hint.className = "android-saved-hint";
-    hint.textContent =
-      "Copia el .zip a la carpeta saves de Minecraft Java en tu PC (o en tu lanzador de Java para Android) y descomprímelo.";
+    hint.textContent = /\.mcworld$/i.test(path)
+      ? "Abre el archivo .mcworld desde Descargas/Arnis con tu explorador de archivos y elige Minecraft: el mundo se importa solo."
+      : "Copia el .zip a la carpeta saves de Minecraft Java en tu PC (o en tu lanzador de Java para Android) y descomprímelo.";
     box.append(close, title, where, hint);
     box.style.display = "flex";
   }
@@ -350,12 +352,26 @@
     panel.id = "android-panel";
 
     // 1. Java Edition
-    const javaRow = document.createElement("div");
-    javaRow.className = "android-java";
-    javaRow.innerHTML =
-      '<span class="android-java-icon">☕</span>' +
-      '<span class="android-java-text"><b>Mundo para Java Edition</b><small>Minecraft Java 1.21.4+</small></span>' +
-      '<span class="android-java-check">✓</span>';
+    // 1. Edition: the original Java / Bedrock buttons, moved here, so main.js keeps
+    // handling the choice (and enabling/disabling edition-specific settings).
+    const formatRow = document.createElement("div");
+    formatRow.className = "android-format";
+    [
+      ["format-java", "☕", "Java", "PC · 1.21.4+"],
+      ["format-bedrock", "🧱", "Bedrock", "Celular · consola · Windows"],
+    ].forEach(function (def) {
+      const btn = document.getElementById(def[0]);
+      if (!btn) return;
+      btn.innerHTML =
+        '<span class="fmt-icon">' + def[1] + '</span>' +
+        '<span class="fmt-text"><b>' + def[2] + '</b><small>' + def[3] + '</small></span>';
+      btn.style.display = "";
+      btn.addEventListener("click", function () {
+        // Some settings only apply to one edition; let main.js update them first.
+        setTimeout(refreshChips, 50);
+      });
+      formatRow.appendChild(btn);
+    });
 
     // 2. Quick settings, with the full settings page as the last tile
     const chips = document.createElement("div");
@@ -395,7 +411,7 @@
     head.setAttribute("aria-label", "Mostrar u ocultar las opciones");
     head.innerHTML = '<span class="sheet-handle"></span><span id="sheet-peek-text" class="sheet-peek"></span>';
 
-    panel.append(head, javaRow, chips, details);
+    panel.append(head, formatRow, chips, details);
     if (info) panel.appendChild(info);
     if (progress) panel.appendChild(progress);
     if (start) panel.appendChild(start);
@@ -411,9 +427,6 @@
   }
 
   document.addEventListener("DOMContentLoaded", function () {
-    if (typeof window.setWorldFormat === "function") {
-      window.setWorldFormat("java");
-    }
     buildLayout();
 
     // main.js restores saved settings during its own start-up; apply the "all on"

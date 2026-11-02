@@ -4,7 +4,8 @@
 > no oficial). GitHub Actions (`.github/workflows/android.yml`) genera el APK en cada cambio y lo
 > publica en **Releases** como `Arnis-Android.apk`.
 >
-> - Solo mundos de **Minecraft Java Edition**. Se guardan en **Descargas/Arnis**, como carpeta y como `.zip`.
+> - Mundos de **Minecraft Java Edition** (carpeta + `.zip`) o **Bedrock Edition** (`.mcworld`), a
+>   elegir en la app. Se guardan en **Descargas/Arnis**.
 > - Interfaz adaptada al celular y siempre en modo oscuro. La telemetría está desactivada.
 > - Cambios principales: `src/lib.rs` (antes `main.rs`), `src/android.rs`, `src/gui/css/mobile.css`,
 >   `src/gui/js/android.js`, `tauri.android.conf.json` y la carpeta `android/`.
