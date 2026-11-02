@@ -49,16 +49,16 @@ jobs:
           node-version: 20
 
       - name: Tauri CLI
-        run: npm install -g @tauri-apps/cli@2.11
+        run: npm install --no-audit --no-fund
 
       - name: Generar proyecto Android
         run: |
-          tauri android init --ci
-          tauri icon assets/icons/icon.png
+          npm run tauri -- android init --ci
+          npm run tauri -- icon assets/icons/icon.png
           bash android/patch-android-project.sh
 
       - name: Compilar APK (arm64)
-        run: tauri android build --ci --apk --target aarch64
+        run: npm run tauri -- android build --ci --apk --target aarch64
 
       - name: Firmar APK
         run: |
