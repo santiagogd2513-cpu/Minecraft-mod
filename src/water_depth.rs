@@ -1,0 +1,1611 @@
+//! Per-cell water depth carving from a chamfer-3-4 distance transform over the LC_WATER mask.
+
+use crate::block_definitions::{
+    Block, AIR, CLAY, COARSE_DIRT, CRACKED_STONE_BRICKS, DIRT, GRAVEL, KELP, KELP_PLANT,
+    MOSSY_STONE_BRICKS, POLISHED_DEEPSLATE, SAND, SANDSTONE, SEAGRASS, SEA_PICKLE, SOUL_SAND,
+    STONE, STONE_BRICKS, TALL_SEAGRASS_BOTTOM, TALL_SEAGRASS_TOP, WATER,
+};
+use crate::coordinate_system::cartesian::{XZBBox, XZPoint};
+use crate::element_processing::bridges::BridgeSurfaceMap;
+use crate::floodfill_cache::RoadMaskBitmap;
+use crate::ground::Ground;
+use crate::land_cover::{coord_hash, LC_WATER};
+use crate::world_editor::{min_y, WorldEditor};
+use fnv::FnvHashMap;
+
+/// Flat shoal width in chamfer-DT units; slope only starts past it.
+const SHOAL_DT_UNITS: u16 = 9;
+
+/// DT saturation cap. Depth clamps to <=6 long before this.
+const DT_MAX: u8 = u8::MAX;
+
+/// Maximum water carve depth, in blocks (the deepest tier).
+const MAX_WATER_DEPTH: i32 = 6;
+
+/// Room a tunnel needs under the deepest bed, on top of the floor the carve leaves it. That
+/// bed lies on `min_y() + 1`; a bore keeping its cover under it needs it at `min_y() + 9`.
+pub const BORE_ROOM: i32 = 8;
+
+/// Cap on water sub-rect cells (bounds memory, keeps u32 indices valid); ~1000 km².
+const MAX_WATER_FIELD_CELLS: usize = 1_000_000_000;
+
+/// Frontier capacity carried between components; a bigger one gives its buffer back.
+const FRONTIER_KEEP: usize = 1 << 16;
+
+#[inline]
+fn nibble_get(buf: &[u8], i: usize) -> u8 {
+    let byte = buf[i >> 1];
+    if i & 1 == 0 {
+        byte & 0x0F
+    } else {
+        byte >> 4
+    }
+}
+
+#[inline]
+fn nibble_set(buf: &mut [u8], i: usize, v: u8) {
+    debug_assert!(v < 16, "nibble value {v} out of range");
+    let byte = &mut buf[i >> 1];
+    if i & 1 == 0 {
+        *byte = (*byte & 0xF0) | (v & 0x0F);
+    } else {
+        *byte = (*byte & 0x0F) | ((v & 0x0F) << 4);
+    }
+}
+
+#[inline]
+fn bit_get(b: &[u64], i: usize) -> bool {
+    (b[i >> 6] >> (i & 63)) & 1 == 1
+}
+
+#[inline]
+fn bit_set(b: &mut [u64], i: usize) {
+    b[i >> 6] |= 1u64 << (i & 63);
+}
+
+#[inline]
+fn for_each_neighbor(idx: usize, w: usize, h: usize, mut f: impl FnMut(usize)) {
+    let i = idx % w;
+    let j = idx / w;
+    if i > 0 {
+        f(idx - 1);
+    }
+    if i + 1 < w {
+        f(idx + 1);
+    }
+    if j > 0 {
+        f(idx - w);
+    }
+    if j + 1 < h {
+        f(idx + w);
+    }
+}
+
+/// Baked per-cell carve depth (0..=6), nibble-packed over the water sub-rect.
+pub struct BigWaterField {
+    depth: Vec<u8>,
+    width: usize,
+    height: usize,
+    min_x: i32,
+    min_z: i32,
+}
+
+impl BigWaterField {
+    fn empty() -> Self {
+        Self {
+            depth: Vec::new(),
+            width: 0,
+            height: 0,
+            min_x: 0,
+            min_z: 0,
+        }
+    }
+
+    #[inline]
+    /// Whether the square of cells within `r` of (x, z) reaches into the water sub-rect.
+    pub fn reaches(&self, x: i32, z: i32, r: i32) -> bool {
+        let (x0, z0) = (i64::from(self.min_x), i64::from(self.min_z));
+        let (x, z, r) = (i64::from(x), i64::from(z), i64::from(r));
+        self.width > 0
+            && x + r >= x0
+            && z + r >= z0
+            && x - r < x0 + self.width as i64
+            && z - r < z0 + self.height as i64
+    }
+
+    fn local_idx(&self, x: i32, z: i32) -> Option<usize> {
+        let lx = i64::from(x) - i64::from(self.min_x);
+        let lz = i64::from(z) - i64::from(self.min_z);
+        if lx < 0 || lz < 0 || lx as usize >= self.width || lz as usize >= self.height {
+            return None;
+        }
+        Some(lz as usize * self.width + lx as usize)
+    }
+
+    /// Carve depth at the cell; 0 outside the water sub-rect.
+    #[inline]
+    pub fn depth_at(&self, x: i32, z: i32) -> i32 {
+        match self.local_idx(x, z) {
+            Some(i) => i32::from(nibble_get(&self.depth, i)),
+            None => 0,
+        }
+    }
+
+    /// Max depth in the 7x7 around (x, z); proxy for body width. Edge-safe via depth_at.
+    pub fn body_max_7x7(&self, x: i32, z: i32) -> i32 {
+        let mut m = 0;
+        for dz in -3..=3 {
+            for dx in -3..=3 {
+                m = m.max(self.depth_at(x + dx, z + dz));
+                if m >= MAX_WATER_DEPTH {
+                    return m;
+                }
+            }
+        }
+        m
+    }
+}
+
+/// Map a grid-cell span to the block span that samples into it (a safe superset).
+pub(crate) fn grid_span_to_block_span(
+    g_lo: usize,
+    g_hi: usize,
+    world_dim: usize,
+    grid_dim: usize,
+) -> (i32, i32) {
+    if grid_dim <= 1 || world_dim <= 1 {
+        return (0, world_dim.saturating_sub(1) as i32);
+    }
+    let f = (world_dim - 1) as f64 / (grid_dim - 1) as f64;
+    let lo = ((g_lo as f64 - 0.5) * f).floor() as i32 - 1;
+    let hi = ((g_hi as f64 + 0.5) * f).ceil() as i32 + 1;
+    (lo.max(0), hi.min(world_dim as i32 - 1))
+}
+
+/// Run a chamfer DT over the LC_WATER mask and bake per-cell carve depth.
+pub fn compute_big_water_field(ground: &Ground, xzbbox: &XZBBox) -> BigWaterField {
+    let min_x = xzbbox.min_x();
+    let max_x = xzbbox.max_x();
+    let min_z = xzbbox.min_z();
+    let max_z = xzbbox.max_z();
+
+    // Water bbox from the small land-cover grid, avoiding a full-world scan.
+    let (wmin_x, wmin_z, wmax_x, wmax_z) = match ground.lc_water_block_bounds() {
+        Some((lx, lz, hx, hz)) => (min_x + lx, min_z + lz, min_x + hx, min_z + hz),
+        None => return BigWaterField::empty(),
+    };
+
+    let is_lc_water =
+        |x: i32, z: i32| ground.cover_class(XZPoint::new(x - min_x, z - min_z)) == LC_WATER;
+
+    // Pad by one for the shore ring (clamped); keeps the DT identical to full-bbox.
+    let smin_x = (wmin_x - 1).max(min_x);
+    let smax_x = (wmax_x + 1).min(max_x);
+    let smin_z = (wmin_z - 1).max(min_z);
+    let smax_z = (wmax_z + 1).min(max_z);
+    let sw = (smax_x - smin_x + 1) as usize;
+    let sh = (smax_z - smin_z + 1) as usize;
+    // Cap cells to bound memory; above it, render flat water instead of crashing.
+    let total = match sw.checked_mul(sh) {
+        Some(t) if t <= MAX_WATER_FIELD_CELLS => t,
+        _ => {
+            eprintln!("Warning: water area too large for depth carving; rendering flat water");
+            return BigWaterField::empty();
+        }
+    };
+
+    // Seed DT: water = DT_MAX (unreached), shore/land = 0.
+    let mut dt = vec![0u8; total];
+    for z in smin_z..=smax_z {
+        let row = (z - smin_z) as usize * sw;
+        for x in smin_x..=smax_x {
+            if is_lc_water(x, z) {
+                dt[row + (x - smin_x) as usize] = DT_MAX;
+            }
+        }
+    }
+    chamfer_3_4_dt(&mut dt, sw, sh);
+
+    // Per-component BFS for the max DT, then a second walk bakes each cell's depth.
+    // Levels are held in swapped frontiers, so residency is the perimeter, not the body.
+    let mut depth = vec![0u8; total.div_ceil(2)];
+    let mut visited = vec![0u64; total.div_ceil(64)];
+    let mut baked = vec![0u64; total.div_ceil(64)];
+    let mut cur: Vec<u32> = Vec::new();
+    let mut next: Vec<u32> = Vec::new();
+    for start in 0..total {
+        if dt[start] == 0 || bit_get(&visited, start) {
+            continue;
+        }
+        let mut comp_max = 0u8;
+        bit_set(&mut visited, start);
+        cur.clear();
+        cur.push(start as u32);
+        while !cur.is_empty() {
+            next.clear();
+            for &c in &cur {
+                let idx = c as usize;
+                comp_max = comp_max.max(dt[idx]);
+                for_each_neighbor(idx, sw, sh, |n| {
+                    if dt[n] != 0 && !bit_get(&visited, n) {
+                        bit_set(&mut visited, n);
+                        next.push(n as u32);
+                    }
+                });
+            }
+            std::mem::swap(&mut cur, &mut next);
+        }
+
+        let cm = u16::from(comp_max);
+        bit_set(&mut baked, start);
+        cur.push(start as u32);
+        while !cur.is_empty() {
+            next.clear();
+            for &c in &cur {
+                let idx = c as usize;
+                let x = smin_x + (idx % sw) as i32;
+                let z = smin_z + (idx / sw) as i32;
+                let d = ocean_depth_for_cell(x, z, u16::from(dt[idx]), cm);
+                nibble_set(&mut depth, idx, d as u8);
+                for_each_neighbor(idx, sw, sh, |n| {
+                    if dt[n] != 0 && !bit_get(&baked, n) {
+                        bit_set(&mut baked, n);
+                        next.push(n as u32);
+                    }
+                });
+            }
+            std::mem::swap(&mut cur, &mut next);
+        }
+        cur.shrink_to(FRONTIER_KEEP);
+        next.shrink_to(FRONTIER_KEEP);
+    }
+
+    BigWaterField {
+        depth,
+        width: sw,
+        height: sh,
+        min_x: smin_x,
+        min_z: smin_z,
+    }
+}
+
+/// In-place two-sweep chamfer-3-4 DT. Input: 0 = shore, `DT_MAX` = water seed.
+pub(crate) fn chamfer_3_4_dt(d: &mut [u8], w: usize, h: usize) {
+    let step = |v: u8, add: u8| v.saturating_add(add);
+    for j in 0..h {
+        for i in 0..w {
+            let idx = j * w + i;
+            if d[idx] == 0 {
+                continue;
+            }
+            let mut best = d[idx];
+            if i > 0 {
+                best = best.min(step(d[idx - 1], 3));
+            }
+            if j > 0 {
+                best = best.min(step(d[idx - w], 3));
+                if i > 0 {
+                    best = best.min(step(d[idx - w - 1], 4));
+                }
+                if i + 1 < w {
+                    best = best.min(step(d[idx - w + 1], 4));
+                }
+            }
+            d[idx] = best;
+        }
+    }
+    for j in (0..h).rev() {
+        for i in (0..w).rev() {
+            let idx = j * w + i;
+            if d[idx] == 0 {
+                continue;
+            }
+            let mut best = d[idx];
+            if i + 1 < w {
+                best = best.min(step(d[idx + 1], 3));
+            }
+            if j + 1 < h {
+                best = best.min(step(d[idx + w], 3));
+                if i > 0 {
+                    best = best.min(step(d[idx + w - 1], 4));
+                }
+                if i + 1 < w {
+                    best = best.min(step(d[idx + w + 1], 4));
+                }
+            }
+            d[idx] = best;
+        }
+    }
+}
+
+/// Width-tiered max carve depth. Bigger bodies reach a deeper floor.
+#[inline]
+fn polygon_local_max(component_max_units: u16) -> i32 {
+    if component_max_units < 21 {
+        2
+    } else if component_max_units < 45 {
+        3
+    } else if component_max_units < 75 {
+        4
+    } else {
+        6
+    }
+}
+
+/// Depth from an effective DT: local_max * sqrt(dist/span), tier-clamped.
+fn depth_from_dt(dt_eff: f64, component_max_units: u16) -> i32 {
+    if dt_eff < f64::from(SHOAL_DT_UNITS) {
+        return 0;
+    }
+    let local_max = polygon_local_max(component_max_units);
+    let dist_blocks = (dt_eff - f64::from(SHOAL_DT_UNITS)) / 3.0;
+    // Sqrt curve: steep near shore, smooth plateau; kills the linear-band terracing.
+    let span: f64 = if component_max_units < 21 {
+        6.0
+    } else if component_max_units < 45 {
+        12.0
+    } else if component_max_units < 75 {
+        20.0
+    } else {
+        35.0
+    };
+    let t = (dist_blocks / span).clamp(0.0, 1.0);
+    ((f64::from(local_max) * t.sqrt()).floor() as i32).clamp(0, local_max)
+}
+
+/// Per-cell carve depth, with deterministic contour wobble on the bank lines.
+fn ocean_depth_for_cell(x: i32, z: i32, dt_units: u16, component_max_units: u16) -> i32 {
+    if dt_units == 0 {
+        return 0;
+    }
+    let wobble = (crate::ground_generation::value_noise_01(x, z, 12) - 0.5) * 4.0;
+    depth_from_dt(f64::from(dt_units) + wobble, component_max_units)
+}
+
+/// Safe upper bound on a map's deepest carve, from the pre-repair water mask.
+pub fn estimate_max_carve_depth(
+    lc_grid: &[Vec<u8>],
+    world_width: usize,
+    world_height: usize,
+) -> i32 {
+    let gh = lc_grid.len();
+    let gw = lc_grid.first().map_or(0, Vec::len);
+    if gw == 0 || gh == 0 {
+        return 0;
+    }
+    let mut dt = vec![0u8; gw * gh];
+    let mut any_water = false;
+    for (z, row) in lc_grid.iter().enumerate() {
+        for (x, &c) in row.iter().enumerate() {
+            if c == LC_WATER {
+                dt[z * gw + x] = DT_MAX;
+                any_water = true;
+            }
+        }
+    }
+    if !any_water {
+        return 0;
+    }
+    chamfer_3_4_dt(&mut dt, gw, gh);
+    let grid_max_dt = dt.iter().copied().max().unwrap_or(0);
+    // Inclusive-span ratio, matching the grid<->block mapping elsewhere (safe upper bound).
+    let wr = world_width.saturating_sub(1).max(1) as f64 / gw.saturating_sub(1).max(1) as f64;
+    let hr = world_height.saturating_sub(1).max(1) as f64 / gh.saturating_sub(1).max(1) as f64;
+    let block_max_dt = f64::from(grid_max_dt) * wr.max(hr).max(1.0);
+    let comp_max = block_max_dt.min(f64::from(u16::MAX)) as u16;
+    depth_from_dt(block_max_dt + 2.0, comp_max)
+}
+
+/// Water a tunnel crosses: how deep the carve can dig there, and the lowest terrain of the
+/// body it crosses, whose surface stands no lower.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BoreCrossing {
+    pub depth: i32,
+    pub lowest_m: f64,
+}
+
+/// A `BoreCrossing` for each land-cover water cell (column, row) a tunnel runs under. The
+/// carve sizes its bodies on the block field, where two the grid keeps apart may join, so
+/// the depth is the most a body of any size digs that far from its shore; it is set by the
+/// distance far more than by the size. The heights come from `height_m`, NaN where none.
+pub fn bore_crossings(
+    lc_grid: &[Vec<u8>],
+    world_width: usize,
+    world_height: usize,
+    cells: &[(usize, usize)],
+    height_m: impl Fn(usize, usize) -> f64,
+) -> Vec<BoreCrossing> {
+    let gh = lc_grid.len();
+    let gw = lc_grid.first().map_or(0, Vec::len);
+    let is_water = |x: usize, z: usize| lc_grid[z].get(x) == Some(&LC_WATER);
+    let cells: Vec<(usize, usize)> = cells
+        .iter()
+        .copied()
+        .filter(|&(x, z)| z < gh && x < gw && is_water(x, z))
+        .collect();
+    if cells.is_empty() {
+        return Vec::new();
+    }
+    let mut dt: Vec<u8> = (0..gw * gh)
+        .map(|i| if is_water(i % gw, i / gw) { DT_MAX } else { 0 })
+        .collect();
+    chamfer_3_4_dt(&mut dt, gw, gh);
+    let wr = world_width.saturating_sub(1).max(1) as f64 / gw.saturating_sub(1).max(1) as f64;
+    let hr = world_height.saturating_sub(1).max(1) as f64 / gh.saturating_sub(1).max(1) as f64;
+    let ratio = wr.max(hr).max(1.0);
+
+    // The lowest ground of each crossed body, walked once per body from its first crossing.
+    let at: FnvHashMap<usize, usize> = cells
+        .iter()
+        .enumerate()
+        .map(|(k, &(x, z))| (z * gw + x, k))
+        .collect();
+    let mut lowest = vec![f64::INFINITY; cells.len()];
+    let mut seen = vec![0u64; (gw * gh).div_ceil(64)];
+    for &(x, z) in &cells {
+        let start = z * gw + x;
+        if bit_get(&seen, start) {
+            continue;
+        }
+        bit_set(&mut seen, start);
+        let (mut members, mut low) = (Vec::new(), f64::INFINITY);
+        let mut frontier = vec![start];
+        while let Some(i) = frontier.pop() {
+            if let Some(&k) = at.get(&i) {
+                members.push(k);
+            }
+            let h = height_m(i % gw, i / gw);
+            if h.is_finite() {
+                low = low.min(h);
+            }
+            for_each_neighbor(i, gw, gh, |n| {
+                if dt[n] != 0 && !bit_get(&seen, n) {
+                    bit_set(&mut seen, n);
+                    frontier.push(n);
+                }
+            });
+        }
+        for k in members {
+            lowest[k] = low;
+        }
+    }
+
+    cells
+        .iter()
+        .zip(lowest)
+        .map(|(&(x, z), lowest_m)| {
+            // The farthest from the shore the crossing reaches, a cell either way, and
+            // the contour wobble on top.
+            let near = (z.saturating_sub(1)..=(z + 1).min(gh - 1))
+                .flat_map(|j| (x.saturating_sub(1)..=(x + 1).min(gw - 1)).map(move |i| (i, j)))
+                .map(|(i, j)| dt[j * gw + i])
+                .max()
+                .unwrap_or(0);
+            let dt_eff = f64::from(near) * ratio + 2.0;
+            // One body size from each depth tier.
+            let depth = [0u16, 21, 45, 75]
+                .into_iter()
+                .map(|size| depth_from_dt(dt_eff, size))
+                .max()
+                .unwrap_or(0);
+            BoreCrossing { depth, lowest_m }
+        })
+        .collect()
+}
+
+/// The depth a column is carved to: within the tiers, and with the bed kept above bedrock.
+fn carve_depth(depth: i32, water_y: i32) -> i32 {
+    depth
+        .clamp(0, MAX_WATER_DEPTH)
+        .min((water_y - min_y() - 2).max(0))
+}
+
+/// The surface the land-cover carve fills a water cell to over terrain at `ground_y`, or
+/// None for a bank the snap pulled below its terrain. Interior water above a dip is a step
+/// inside the body, not a bank, and keeps its own level.
+fn lc_water_surface(ground: &Ground, coord: XZPoint, ground_y: i32) -> Option<i32> {
+    let water_y = ground.water_level(coord);
+    if ground_y <= water_y {
+        Some(water_y)
+    } else if ground.is_interior_water(coord) {
+        Some(ground_y)
+    } else {
+        None
+    }
+}
+
+/// Y of the bed `carve_lc_water_region` lays at (x, z) over terrain at `ground_y`, or None
+/// where it carves nothing. The roads it keeps are not known here, so under one this errs
+/// deep, which is the safe side for a bore that has to stay under the bed.
+pub fn lc_carved_bed(
+    ground: &Ground,
+    bwf: &BigWaterField,
+    coord: XZPoint,
+    x: i32,
+    z: i32,
+    ground_y: i32,
+) -> Option<i32> {
+    // The carve only walks the water sub-rect; past it a cell keeps its terrain.
+    bwf.local_idx(x, z)?;
+    if ground.cover_class(coord) != LC_WATER {
+        return None;
+    }
+    let water_y = lc_water_surface(ground, coord, ground_y)?;
+    Some(water_y - carve_depth(bwf.depth_at(x, z), water_y) - 1)
+}
+
+/// What a tunnel shell is built of: brick walls and roof, and the rail tunnel's floor.
+pub(crate) const BORE_SHELL: &[Block] = &[
+    STONE_BRICKS,
+    CRACKED_STONE_BRICKS,
+    MOSSY_STONE_BRICKS,
+    POLISHED_DEEPSLATE,
+];
+
+/// The deepest carve up to `depth` that keeps the bed and the block under it on top of a
+/// tunnel shell in the column, or None where the shell reaches up into the bed itself.
+fn depth_over_bore(editor: &WorldEditor, x: i32, z: i32, water_y: i32, depth: i32) -> Option<i32> {
+    // The carve rewrites the column from its surface down to the block under the bed.
+    let shell_top = (water_y - depth - 2..=water_y)
+        .rev()
+        .find(|&y| editor.check_for_block_absolute(x, y, z, Some(BORE_SHELL), None));
+    match shell_top {
+        Some(top) => {
+            let fits = water_y - top - 3;
+            (fits >= 0).then_some(fits)
+        }
+        None => Some(depth),
+    }
+}
+
+/// Place the underwater stack: water column, a layered bed, dunes and vegetation.
+pub fn carve_water_column(
+    editor: &mut WorldEditor,
+    x: i32,
+    z: i32,
+    water_y: i32,
+    depth: i32,
+    road_mask: &RoadMaskBitmap,
+    bwf: &BigWaterField,
+) {
+    debug_assert!(
+        depth <= MAX_WATER_DEPTH,
+        "water carve depth {depth} exceeds the max tier {MAX_WATER_DEPTH}"
+    );
+    let depth = carve_depth(depth, water_y);
+    // Bridge piers continue down to the bed.
+    if let Some(pier) = editor.support_column(x, z) {
+        for dy in 0..=depth {
+            editor.set_block_absolute(pier, x, water_y - dy, z, None, Some(&[]));
+        }
+        return;
+    }
+    for dy in 0..=depth {
+        editor.set_block_absolute(WATER, x, water_y - dy, z, None, Some(&[]));
+    }
+    clear_stranded_vegetation(editor, x, z, water_y);
+    let bed_y = water_y - depth - 1;
+
+    // Keep the bed plain near causeways so blobs/dunes/veg don't clutter piers.
+    let near_bridge = depth >= 2 && !road_mask.is_empty() && bridge_adjacent(road_mask, x, z);
+
+    // Layered bed: gravel base with noise-driven sand/clay/dirt patches over stone.
+    let (top_block, under_block) = match depth {
+        0..=1 => shallow_bed(editor, x, z),
+        2..=6 if near_bridge => {
+            if crate::ground_generation::value_noise_01(x, z, 6) < 0.4 && depth <= 3 {
+                (SAND, STONE)
+            } else {
+                (GRAVEL, STONE)
+            }
+        }
+        2..=6 => {
+            // Coherent jitter breaks concentric depth rings as patches, not speckle.
+            let jn = crate::ground_generation::value_noise_01(x + 7, z + 13, 22);
+            let jitter = if jn < 0.34 {
+                -1
+            } else if jn > 0.66 {
+                1
+            } else {
+                0
+            };
+            let d = (depth + jitter).max(1);
+            // Domain-warp the sample coords so patches read organic, not circular.
+            let warp_x = crate::ground_generation::value_noise_01(x + 901, z + 33, 52);
+            let warp_z = crate::ground_generation::value_noise_01(x + 17, z + 811, 52);
+            let wx = x + ((warp_x - 0.5) * 28.0) as i32;
+            let wz = z + ((warp_z - 0.5) * 28.0) as i32;
+            // Per-block noise, sampled lazily so most cells skip the rare tiers.
+            let vn = |dx, dz, s| crate::ground_generation::value_noise_01(wx + dx, wz + dz, s);
+            let top = if d <= 1 {
+                shallow_bed(editor, x, z).0
+            } else if d == 2 {
+                if vn(53, 97, 56) > 0.50 {
+                    SAND
+                } else {
+                    GRAVEL
+                }
+            } else if d >= 5 && vn(727, 911, 8) > 0.96 {
+                SOUL_SAND
+            } else if vn(73, 109, 64) > 0.74 {
+                CLAY
+            } else if vn(53, 97, 56) > 0.81 {
+                SAND
+            } else if vn(211, 41, 44) > 0.88 {
+                DIRT
+            } else if vn(311, 17, 50) > 0.90 {
+                COARSE_DIRT
+            } else {
+                GRAVEL
+            };
+            (top, STONE)
+        }
+        _ => (GRAVEL, STONE),
+    };
+
+    if bed_y > min_y() {
+        editor.set_block_absolute(top_block, x, bed_y, z, None, Some(&[]));
+    }
+    // Supports the gravity-affected bed; dropped onto bedrock at the lowest carve.
+    if bed_y - 1 > min_y() {
+        editor.set_block_absolute(under_block, x, bed_y - 1, z, None, Some(&[]));
+    }
+    // Backfill stone so neighbour side-faces never expose air under varied beds.
+    let fill_to = (bed_y - 2).max(min_y() + 1);
+    let fill_from = (bed_y - 12).max(min_y() + 1);
+    if fill_from <= fill_to {
+        editor.fill_column_absolute(STONE, x, z, fill_from, fill_to, true);
+    }
+
+    // Dunes return their crest so veg plants on top instead of inside them.
+    // 7x7 body max is sampled lazily; depth 1 always yields amp 0, skip it too.
+    let bump = if depth >= 2 && !near_bridge {
+        let amp = dune_amp(bwf.body_max_7x7(x, z), depth);
+        place_underwater_dunes(editor, x, z, water_y, bed_y, amp, top_block)
+    } else {
+        0
+    };
+    if depth >= 3 && !near_bridge {
+        place_underwater_vegetation(editor, x, z, water_y, bed_y + bump, depth);
+    }
+}
+
+/// Bed and the block under it where the water is shallow enough to show the bed. Sand
+/// along a beach; elsewhere patches of gravel, earth and clay, or the shallows read as a
+/// sand stripe along every bank.
+pub(crate) fn shallow_bed(editor: &WorldEditor, x: i32, z: i32) -> (Block, Block) {
+    if editor.near_beach(x, z, (4.0 * editor.scale()).max(1.0)) {
+        (SAND, SANDSTONE)
+    } else {
+        (earthy_bed(x, z), DIRT)
+    }
+}
+
+fn earthy_bed(x: i32, z: i32) -> Block {
+    let n = crate::ground_generation::value_noise_01(x + 211, z + 37, 6);
+    if n < 0.35 {
+        GRAVEL
+    } else if n < 0.6 {
+        if coord_hash(x, z).is_multiple_of(3) {
+            COARSE_DIRT
+        } else {
+            DIRT
+        }
+    } else if n < 0.82 {
+        CLAY
+    } else {
+        SAND
+    }
+}
+
+/// Strip plants left floating on a freshly carved water surface, leaving piers
+/// alone. Reading first avoids filling a section with air per water cell. Only
+/// cane and cacti reach a third block, so canopy leaves up there are left be.
+fn clear_stranded_vegetation(editor: &mut WorldEditor, x: i32, z: i32, water_y: i32) {
+    for y in water_y + 1..=water_y + 3 {
+        if editor.get_block_absolute(x, y, z).is_some() {
+            let plants = if y <= water_y + 2 {
+                crate::ground_decoration::LOOSE_PLANTS
+            } else {
+                crate::ground_decoration::STACKED_PLANT_PARTS
+            };
+            editor.set_block_absolute(AIR, x, y, z, Some(plants), None);
+        }
+    }
+    // A trunk rooted on the new surface has to go whole. Trees are placed
+    // before the polygon that floods them, and the land-cover water mask is
+    // coarser than the carve, so the guards on the tree paths can miss it.
+    let above = editor.get_block_absolute(x, water_y + 1, z);
+    if above.is_some_and(is_trunk) {
+        clear_tree_from(editor, x, water_y + 1, z);
+    } else if above.is_some_and(|b| b.name().ends_with("_leaves")) {
+        // A leaf resting right on the new surface reads as floating.
+        editor.set_block_absolute(AIR, x, water_y + 1, z, None, Some(&[]));
+    }
+}
+
+fn is_trunk(block: Block) -> bool {
+    let name = block.name();
+    name.ends_with("_log") || name.ends_with("_stem")
+}
+
+pub(crate) fn is_tree_part(block: Block) -> bool {
+    is_trunk(block) || block.name().ends_with("_leaves")
+}
+
+/// Largest tree the flood will take out. A giant schematic is well under this,
+/// and the cap stops a canopy that touches its neighbour from unzipping a wood.
+const MAX_TREE_BLOCKS: usize = 4096;
+
+/// Erase the tree connected to (x, y, z). Clearing only the two plant layers
+/// would leave the canopy hanging in the air over the water. Blocks are set to
+/// air as they are visited, so a revisit sees air and stops; no visited set.
+pub(crate) fn clear_tree_from(editor: &mut WorldEditor, x: i32, y: i32, z: i32) {
+    clear_tree_within(editor, x, y, z, |_, _| true);
+}
+
+/// `clear_tree_from`, visiting only the columns `keep` allows.
+pub(crate) fn clear_tree_within(
+    editor: &mut WorldEditor,
+    x: i32,
+    y: i32,
+    z: i32,
+    keep: impl Fn(i32, i32) -> bool,
+) {
+    let mut stack = vec![(x, y, z)];
+    let mut cleared = 0usize;
+    while let Some((cx, cy, cz)) = stack.pop() {
+        if cleared >= MAX_TREE_BLOCKS {
+            break;
+        }
+        if !keep(cx, cz)
+            || !editor
+                .get_block_absolute(cx, cy, cz)
+                .is_some_and(is_tree_part)
+        {
+            continue;
+        }
+        editor.set_block_absolute(AIR, cx, cy, cz, None, Some(&[]));
+        cleared += 1;
+        for (dx, dy, dz) in [
+            (1, 0, 0),
+            (-1, 0, 0),
+            (0, 1, 0),
+            (0, -1, 0),
+            (0, 0, 1),
+            (0, 0, -1),
+        ] {
+            stack.push((cx + dx, cy + dy, cz + dz));
+        }
+    }
+}
+
+/// True if any cell in the 5x5 area around (x, z), center excluded, carries a road/bridge.
+fn bridge_adjacent(road_mask: &RoadMaskBitmap, x: i32, z: i32) -> bool {
+    for dz in -2..=2 {
+        for dx in -2..=2 {
+            if (dx != 0 || dz != 0) && road_mask.contains(x + dx, z + dz) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Dune amplitude: target keyed off body width (7x7 BWF max), capped below the surface.
+fn dune_amp(body_max: i32, depth: i32) -> i32 {
+    // BWF depth caps at MAX_WATER_DEPTH=6, so 6 must map to the top tier.
+    let target = match body_max {
+        ..=3 => 2,
+        4..=5 => 3,
+        _ => 4,
+    };
+    target.min((depth - 1).max(0))
+}
+
+/// Width-aware multi-octave dunes 1-4 blocks tall on the bed. Returns the
+/// placed crest height. Ported from the Teddy fork.
+fn place_underwater_dunes(
+    editor: &mut WorldEditor,
+    x: i32,
+    z: i32,
+    water_y: i32,
+    bed_y: i32,
+    amp: i32,
+    bed_block: Block,
+) -> i32 {
+    if amp <= 0 {
+        return 0;
+    }
+    let warp_x = crate::ground_generation::value_noise_01(x + 901, z + 33, 50);
+    let warp_z = crate::ground_generation::value_noise_01(x + 17, z + 811, 50);
+    let wx = x + ((warp_x - 0.5) * 30.0) as i32;
+    let wz = z + ((warp_z - 0.5) * 30.0) as i32;
+    let n_large = crate::ground_generation::value_noise_01(wx + 113, wz + 257, 44) as f32;
+    let n_med = crate::ground_generation::value_noise_01(wx + 31, wz + 71, 18) as f32;
+    let n_sharp = crate::ground_generation::value_noise_01(wx + 7, wz + 11, 10) as f32;
+    let h_f = 0.40 * n_large + 0.30 * n_med + 0.30 * n_sharp;
+    if h_f < 0.28 {
+        return 0;
+    }
+    let t = (h_f - 0.28) / 0.72;
+    let bump = ((t.powf(0.45) * (amp as f32 + 0.99)).floor() as i32).clamp(1, amp);
+    for dy in 1..=bump {
+        let y = bed_y + dy;
+        if y >= water_y {
+            return dy - 1;
+        }
+        editor.set_block_absolute(bed_block, x, y, z, None, Some(&[]));
+    }
+    bump
+}
+
+/// Clumped underwater vegetation on a carved bed: SEAGRASS/TALL_SEAGRASS/SEA_PICKLE
+/// meadows, with rarer KELP columns in deeper water. Ported from the Teddy fork.
+fn place_underwater_vegetation(
+    editor: &mut WorldEditor,
+    x: i32,
+    z: i32,
+    water_y: i32,
+    bed_top: i32,
+    depth: i32,
+) {
+    // Two decorrelated noise fields gate clumpy meadows instead of pepper-shot cells.
+    let field_noise = crate::ground_generation::value_noise_01(x + 53, z + 89, 30);
+    let cluster_noise = crate::ground_generation::value_noise_01(x + 401, z + 17, 10);
+    let combined = field_noise * cluster_noise;
+
+    // KELP: deep cells where both noises ring high; tip caps the column.
+    let kelp_pick = (crate::land_cover::coord_hash(x + 91, z + 41) % 100) as i32;
+    if depth >= 4 && field_noise > 0.78 && cluster_noise > 0.80 && kelp_pick < 25 {
+        let plant_top_full = water_y - 1;
+        let plant_bottom = bed_top + 1;
+        let avail = plant_top_full - plant_bottom;
+        if avail >= 3 {
+            let hgt_pick = (crate::land_cover::coord_hash(x + 211, z + 503) % 100) as i32;
+            let share = 30 + hgt_pick * 70 / 100;
+            let used = ((avail as i64 * share as i64) / 100) as i32;
+            let used = used.max(3).min(avail);
+            let plant_top = plant_bottom + used;
+            // Replace water, never air, so plants don't grow into the bed or float.
+            for y in plant_bottom..plant_top {
+                editor.set_block_absolute(KELP_PLANT, x, y, z, None, Some(&[AIR]));
+            }
+            editor.set_block_absolute(KELP, x, plant_top, z, None, Some(&[AIR]));
+        }
+        return;
+    }
+
+    // Seagrass meadow mix: 50% SEAGRASS, 35% TALL_SEAGRASS, 15% SEA_PICKLE.
+    if combined > 0.42 {
+        let dropout = crate::land_cover::coord_hash(x + 17, z + 31) % 10;
+        if dropout < 4 {
+            let plant_y = bed_top + 1;
+            if plant_y < water_y {
+                let pick = (crate::land_cover::coord_hash(x + 211, z + 73) % 100) as i32;
+                if pick < 50 {
+                    editor.set_block_absolute(SEAGRASS, x, plant_y, z, None, Some(&[AIR]));
+                } else if pick < 85 && plant_y + 1 < water_y {
+                    editor.set_block_absolute(
+                        TALL_SEAGRASS_BOTTOM,
+                        x,
+                        plant_y,
+                        z,
+                        None,
+                        Some(&[AIR]),
+                    );
+                    editor.set_block_absolute(
+                        TALL_SEAGRASS_TOP,
+                        x,
+                        plant_y + 1,
+                        z,
+                        None,
+                        Some(&[AIR]),
+                    );
+                } else {
+                    editor.set_block_absolute(SEA_PICKLE, x, plant_y, z, None, Some(&[AIR]));
+                }
+            }
+        }
+    }
+}
+
+/// Post-pass carving every LC_WATER cell, so ESA-only water gets depth too.
+pub fn carve_lc_water_pass(
+    editor: &mut WorldEditor,
+    ground: &Ground,
+    xzbbox: &XZBBox,
+    bwf: &BigWaterField,
+    road_mask: &RoadMaskBitmap,
+    tunnel_footprint: &RoadMaskBitmap,
+    bridge_surface: &BridgeSurfaceMap,
+) {
+    let x1 = bwf.min_x + bwf.width as i32 - 1;
+    let z1 = bwf.min_z + bwf.height as i32 - 1;
+    carve_lc_water_region(
+        editor,
+        ground,
+        xzbbox,
+        bwf,
+        road_mask,
+        tunnel_footprint,
+        bridge_surface,
+        bwf.min_x,
+        x1,
+        bwf.min_z,
+        z1,
+    );
+}
+
+/// `carve_lc_water_pass` restricted to the inclusive `[iter_min..=iter_max]` block
+/// range (intersected with the water sub-rect). Per-tile callers pass strict tile
+/// bounds; writes are vertical-only so output is identical regardless of tiling.
+#[allow(clippy::too_many_arguments)]
+pub fn carve_lc_water_region(
+    editor: &mut WorldEditor,
+    ground: &Ground,
+    xzbbox: &XZBBox,
+    bwf: &BigWaterField,
+    road_mask: &RoadMaskBitmap,
+    tunnel_footprint: &RoadMaskBitmap,
+    bridge_surface: &BridgeSurfaceMap,
+    iter_min_x: i32,
+    iter_max_x: i32,
+    iter_min_z: i32,
+    iter_max_z: i32,
+) {
+    let off_x = xzbbox.min_x();
+    let off_z = xzbbox.min_z();
+    // Only the water sub-rect can hold LC_WATER cells; intersect it with the range.
+    let x0 = bwf.min_x.max(iter_min_x);
+    let x1 = (bwf.min_x + bwf.width as i32 - 1).min(iter_max_x);
+    let z0 = bwf.min_z.max(iter_min_z);
+    let z1 = (bwf.min_z + bwf.height as i32 - 1).min(iter_max_z);
+    for z in z0..=z1 {
+        for x in x0..=x1 {
+            let coord = XZPoint::new(x - off_x, z - off_z);
+            if ground.cover_class(coord) != LC_WATER {
+                continue;
+            }
+            let Some(water_y) = lc_water_surface(ground, coord, editor.get_ground_level(x, z))
+            else {
+                continue;
+            };
+            // Keep road surfaces, except under a raised deck.
+            if road_mask.contains(x, z)
+                && (!bridge_surface.deck_clears(x, z, water_y)
+                    || bridge_surface.over_grade_way(x, z))
+            {
+                continue;
+            }
+            let mut depth = carve_depth(bwf.depth_at(x, z), water_y);
+            // A bore runs under the bed wherever the water leaves it room, so the column
+            // over it is carved like the rest of the body. Where it cannot, up a portal
+            // ramp or on the world's floor, the bed stops on top of the shell instead.
+            if tunnel_footprint.contains(x, z) {
+                match depth_over_bore(editor, x, z, water_y, depth) {
+                    Some(fits) => depth = fits,
+                    None => continue,
+                }
+            }
+            carve_water_column(editor, x, z, water_y, depth, road_mask, bwf);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A tunnel under a canal two cells wide needs less room than one under the middle of a
+    /// wide lake, and each crossing knows the lowest ground of the body it crosses.
+    #[test]
+    fn a_crossing_knows_its_water_body() {
+        let (w, h) = (80usize, 40usize);
+        // A canal at x 5..7 and a lake over x 20..75, z 2..38.
+        let grid: Vec<Vec<u8>> = (0..h)
+            .map(|z| {
+                (0..w)
+                    .map(|x| {
+                        if (5..7).contains(&x) || ((20..75).contains(&x) && (2..38).contains(&z)) {
+                            LC_WATER
+                        } else {
+                            0
+                        }
+                    })
+                    .collect()
+            })
+            .collect();
+        let height = |x: usize, _z: usize| if x < 10 { 12.0 } else { 3.0 + x as f64 * 0.01 };
+        let cells = [(5, 20), (47, 20), (2, 20)];
+        let crossings = bore_crossings(&grid, w, h, &cells, height);
+        // The dry cell is no crossing.
+        assert_eq!(crossings.len(), 2);
+        let (canal, lake) = (crossings[0], crossings[1]);
+        assert!(canal.depth <= 2, "{canal:?}");
+        // The middle of the lake is the deepest point of the area, and no shallower here
+        // than the carve floor counts with.
+        assert!(
+            lake.depth >= estimate_max_carve_depth(&grid, w, h),
+            "{lake:?}"
+        );
+        assert!(lake.depth <= MAX_WATER_DEPTH);
+        assert!(lake.depth > canal.depth);
+        assert_eq!(canal.lowest_m, 12.0);
+        assert!((lake.lowest_m - 3.2).abs() < 1e-9, "{lake:?}");
+    }
+
+    #[test]
+    fn dt_distance_from_shore() {
+        let (w, h) = (7usize, 7usize);
+        let mut d = vec![0u8; w * h];
+        for j in 1..6 {
+            for i in 1..6 {
+                d[j * w + i] = DT_MAX;
+            }
+        }
+        chamfer_3_4_dt(&mut d, w, h);
+        assert_eq!(d[0], 0, "shore stays 0");
+        assert_eq!(d[w + 1], 3, "edge water is one ortho step from shore");
+        assert_eq!(d[3 * w + 3], 9, "centre is three ortho steps in");
+    }
+
+    #[test]
+    fn depth_zero_inside_shoal_and_on_land() {
+        assert_eq!(ocean_depth_for_cell(0, 0, 0, 0), 0);
+        assert_eq!(ocean_depth_for_cell(10, 10, 3, 200), 0);
+    }
+
+    #[test]
+    fn depth_clamps_to_tier_max() {
+        assert_eq!(ocean_depth_for_cell(5, 5, u16::from(DT_MAX), 200), 6);
+        assert_eq!(polygon_local_max(10), 2);
+        assert_eq!(polygon_local_max(60), 4);
+        assert_eq!(polygon_local_max(100), 6);
+    }
+
+    #[test]
+    fn sqrt_depth_monotonic_capped_no_cliffs() {
+        for cm in [10u16, 30, 60, 200] {
+            let lm = polygon_local_max(cm);
+            let mut prev = 0;
+            for dt in 0..=300u32 {
+                let d = depth_from_dt(f64::from(dt), cm);
+                assert!(d >= prev, "non-monotonic at dt={dt} cm={cm}");
+                assert!(d - prev <= 1, "step >1 at dt={dt} cm={cm}");
+                assert!(d <= lm);
+                prev = d;
+            }
+            assert_eq!(prev, lm, "far water reaches tier max for cm={cm}");
+        }
+    }
+
+    #[test]
+    fn body_max_7x7_edge_safe() {
+        let mut depth = vec![0u8; 8];
+        nibble_set(&mut depth, 5, 6); // cell (1,1) in a 4x4 field
+        let bwf = BigWaterField {
+            depth,
+            width: 4,
+            height: 4,
+            min_x: 0,
+            min_z: 0,
+        };
+        assert_eq!(
+            bwf.body_max_7x7(0, 0),
+            6,
+            "corner window clips but finds (1,1)"
+        );
+        assert_eq!(bwf.body_max_7x7(-3, -3), 0, "mostly-outside window");
+        assert_eq!(bwf.body_max_7x7(10, 10), 0, "fully outside");
+        assert_eq!(BigWaterField::empty().body_max_7x7(5, 5), 0);
+    }
+
+    #[test]
+    fn estimate_no_water_is_zero() {
+        let grid = vec![vec![0u8; 16]; 16];
+        assert_eq!(estimate_max_carve_depth(&grid, 16, 16), 0);
+    }
+
+    #[test]
+    fn estimate_large_open_water_reaches_max() {
+        let grid = vec![vec![LC_WATER; 32]; 32];
+        assert_eq!(estimate_max_carve_depth(&grid, 32, 32), 6);
+    }
+
+    #[test]
+    fn grid_span_covers_all_mapped_blocks() {
+        // Brute-force every block that samples into grid cells [1,2]; the span must cover them.
+        let (world_dim, grid_dim) = (100usize, 10usize);
+        let (g_lo, g_hi) = (1usize, 2usize);
+        let (lo, hi) = grid_span_to_block_span(g_lo, g_hi, world_dim, grid_dim);
+        for bx in 0..world_dim {
+            let gx =
+                ((bx as f64 / (world_dim - 1) as f64) * (grid_dim - 1) as f64).round() as usize;
+            if gx >= g_lo && gx <= g_hi {
+                assert!(
+                    bx as i32 >= lo && bx as i32 <= hi,
+                    "block {bx} (grid {gx}) not covered by span [{lo},{hi}]"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn dune_amp_keys_off_body_max_capped_by_depth() {
+        assert_eq!(dune_amp(2, 1), 0);
+        assert_eq!(dune_amp(3, 6), 2);
+        assert_eq!(dune_amp(5, 6), 3);
+        assert_eq!(dune_amp(6, 2), 1);
+        assert_eq!(dune_amp(6, 6), 4);
+        assert_eq!(dune_amp(0, 0), 0);
+    }
+
+    #[test]
+    fn bridge_adjacent_detects_neighborhood() {
+        let bbox = XZBBox::rect_from_min_max(0, 0, 31, 31).unwrap();
+        let mut mask = RoadMaskBitmap::new(&bbox);
+        mask.set(12, 10);
+        assert!(
+            bridge_adjacent(&mask, 10, 10),
+            "two cells away is inside the 5x5 area"
+        );
+        assert!(
+            !bridge_adjacent(&mask, 15, 15),
+            "three cells away is outside"
+        );
+        assert!(
+            !bridge_adjacent(&mask, 12, 10),
+            "the road cell itself is excluded"
+        );
+        let empty = RoadMaskBitmap::new(&bbox);
+        assert!(!bridge_adjacent(&empty, 10, 10));
+    }
+
+    #[test]
+    fn carving_under_a_pier_runs_the_pier_down_to_the_bed() {
+        use crate::block_definitions::STONE_BRICKS;
+        use crate::coordinate_system::geographic::LLBBox;
+        let bbox = XZBBox::rect_from_min_max(0, 0, 31, 31).unwrap();
+        let llbbox = LLBBox::new(54.6, 9.9, 54.61, 9.91).unwrap();
+        let mut editor =
+            WorldEditor::new(std::path::PathBuf::from("/dev/null/unused"), &bbox, llbbox);
+        let mask = RoadMaskBitmap::new(&bbox);
+        let bwf = BigWaterField::empty();
+        editor.register_support_column(10, 10, STONE_BRICKS);
+        carve_water_column(&mut editor, 10, 10, 5, 4, &mask, &bwf);
+        carve_water_column(&mut editor, 11, 10, 5, 4, &mask, &bwf);
+        for y in 1..=5 {
+            assert!(editor.check_for_block_absolute(10, y, 10, Some(&[STONE_BRICKS]), None));
+        }
+        assert!(editor.check_for_block_absolute(11, 5, 10, Some(&[WATER]), None));
+    }
+
+    /// A lake 100 blocks across, flat at Y 0, deep enough in the middle for the deepest bed.
+    fn lake() -> (XZBBox, Ground) {
+        let bbox = XZBBox::rect_from_min_max(0, 0, 119, 119).unwrap();
+        let ground = crate::ground::test_support::ground_with_water(120, 120, 0.0, |x, z| {
+            (10..110).contains(&x) && (10..110).contains(&z)
+        });
+        (bbox, ground)
+    }
+
+    fn lake_editor<'a>(bbox: &'a XZBBox, ground: &Ground) -> WorldEditor<'a> {
+        use crate::coordinate_system::geographic::LLBBox;
+        let llbbox = LLBBox::new(54.6, 9.9, 54.61, 9.91).unwrap();
+        let mut editor =
+            WorldEditor::new(std::path::PathBuf::from("/dev/null/unused"), bbox, llbbox);
+        editor.set_ground(std::sync::Arc::new(ground.clone()));
+        editor
+    }
+
+    fn carve_lake(
+        editor: &mut WorldEditor,
+        ground: &Ground,
+        bbox: &XZBBox,
+        bwf: &BigWaterField,
+        tunnel_footprint: &RoadMaskBitmap,
+    ) {
+        carve_lc_water_region(
+            editor,
+            ground,
+            bbox,
+            bwf,
+            &RoadMaskBitmap::new_empty(),
+            tunnel_footprint,
+            &BridgeSurfaceMap::empty(),
+            bbox.min_x(),
+            bbox.max_x(),
+            bbox.min_z(),
+            bbox.max_z(),
+        );
+    }
+
+    /// The reported pale stripes: over a bore the carve stopped at the water's surface and
+    /// left a ridge of bed a block under it. A bore under the bed gets the lake's column.
+    #[test]
+    fn a_bore_under_the_bed_gets_the_column_the_rest_of_the_lake_gets() {
+        use crate::block_definitions::STONE_BRICKS;
+        let _g = crate::world_editor::FLOOR_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let (bbox, ground) = lake();
+        let bwf = compute_big_water_field(&ground, &bbox);
+        let bed_at = |x: i32, z: i32| {
+            lc_carved_bed(&ground, &bwf, XZPoint::new(x, z), x, z, 0).expect("lake")
+        };
+        let mut plain = lake_editor(&bbox, &ground);
+        let mut bored = lake_editor(&bbox, &ground);
+        let mut footprint = RoadMaskBitmap::new(&bbox);
+        // From a shore to the middle, roofed two under the bed with the block under it between.
+        let columns: Vec<(i32, i32)> = (12..=60)
+            .flat_map(|x| (58..=62).map(move |z| (x, z)))
+            .collect();
+        for &(x, z) in &columns {
+            footprint.set(x, z);
+            let bed = bed_at(x, z);
+            for y in bed - 7..=bed - 2 {
+                bored.set_block_absolute(STONE_BRICKS, x, y, z, None, None);
+            }
+        }
+        carve_lake(
+            &mut plain,
+            &ground,
+            &bbox,
+            &bwf,
+            &RoadMaskBitmap::new_empty(),
+        );
+        carve_lake(&mut bored, &ground, &bbox, &bwf, &footprint);
+
+        assert_eq!(
+            bed_at(60, 60),
+            -7,
+            "the middle is carved to the deepest tier"
+        );
+        for &(x, z) in &columns {
+            let bed = bed_at(x, z);
+            for y in bed - 1..=3 {
+                assert_eq!(
+                    bored.get_block_absolute(x, y, z),
+                    plain.get_block_absolute(x, y, z),
+                    "column over the bore differs at ({x}, {y}, {z}), bed {bed}"
+                );
+            }
+            assert!(
+                bored.check_for_block_absolute(x, bed - 2, z, Some(&[STONE_BRICKS]), None),
+                "the carve cut the roof at ({x}, {z})"
+            );
+        }
+    }
+
+    /// Up a portal ramp or on the world's floor a bore cannot get under the bed; the bed
+    /// then stops on top of its shell, never in it.
+    #[test]
+    fn the_bed_stops_on_a_shell_it_cannot_get_under() {
+        use crate::block_definitions::STONE_BRICKS;
+        let _g = crate::world_editor::FLOOR_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let (bbox, ground) = lake();
+        let bwf = compute_big_water_field(&ground, &bbox);
+        let mut editor = lake_editor(&bbox, &ground);
+        let mut footprint = RoadMaskBitmap::new(&bbox);
+        // Roofs four and two under the surface, where the lake is carved six deep.
+        for (x, roof) in [(60, -4), (61, -2)] {
+            footprint.set(x, 60);
+            for y in roof - 5..=roof {
+                editor.set_block_absolute(STONE_BRICKS, x, y, 60, None, None);
+            }
+        }
+        carve_lake(&mut editor, &ground, &bbox, &bwf, &footprint);
+
+        let is = |x: i32, y: i32, blocks: &[Block]| {
+            editor.check_for_block_absolute(x, y, 60, Some(blocks), None)
+        };
+        // A block of water, the bed and the block under it, then the roof.
+        assert!(is(60, 0, &[WATER]) && is(60, -1, &[WATER]));
+        for y in [-2, -3] {
+            assert!(
+                editor.block_exists_absolute(60, y, 60) && !is(60, y, &[WATER, STONE_BRICKS]),
+                "no bed at y={y}"
+            );
+        }
+        assert!(is(60, -4, &[STONE_BRICKS]), "the roof was cut");
+        // No room over the higher roof for a bed and the block under it: left as it was.
+        assert!(!editor.block_exists_absolute(61, 0, 60));
+        assert!(!editor.block_exists_absolute(61, -1, 60));
+        assert!(is(61, -2, &[STONE_BRICKS]), "the roof was cut");
+    }
+
+    #[test]
+    fn shallows_are_sandy_only_along_a_beach() {
+        use crate::block_definitions::STONE_BRICKS;
+        use crate::coordinate_system::geographic::LLBBox;
+        use crate::land_cover::{LC_BEACH, LC_GRASSLAND};
+        // A beach along the west edge and one beach cell at (40, 40), grass elsewhere.
+        let grid: Vec<Vec<u8>> = (0..64)
+            .map(|z| {
+                (0..64)
+                    .map(|x| {
+                        if x < 4 || (x, z) == (40, 40) {
+                            LC_BEACH
+                        } else {
+                            LC_GRASSLAND
+                        }
+                    })
+                    .collect()
+            })
+            .collect();
+        let bbox = XZBBox::rect_from_min_max(0, 0, 63, 63).unwrap();
+        let llbbox = LLBBox::new(54.6, 9.9, 54.61, 9.91).unwrap();
+        let mut editor =
+            WorldEditor::new(std::path::PathBuf::from("/dev/null/unused"), &bbox, llbbox);
+        let lc = crate::land_cover::LandCoverData {
+            grid,
+            water_distance: vec![vec![0u8; 64]; 64],
+            water_blend_cache: once_cell::sync::OnceCell::new(),
+            beach_tiles: once_cell::sync::OnceCell::new(),
+            inland_water: Default::default(),
+            width: 64,
+            height: 64,
+            cells_per_meter: 1.0,
+        };
+        let ground = crate::ground::test_support::ground_with_land_cover_and_elevation(lc, 64, 64);
+        editor.set_ground(std::sync::Arc::new(ground));
+
+        for z in 0..64 {
+            assert_eq!(
+                shallow_bed(&editor, 5, z).0,
+                SAND,
+                "beach shallows at z={z}"
+            );
+        }
+        let mut sand = 0;
+        let mut kinds = std::collections::HashSet::new();
+        for x in 20..64 {
+            for z in 0..64 {
+                let (bed, under) = shallow_bed(&editor, x, z);
+                assert_ne!(under, STONE_BRICKS);
+                sand += usize::from(bed == SAND);
+                kinds.insert(bed);
+            }
+        }
+        assert!(kinds.len() >= 3, "bed is one material: {kinds:?}");
+        assert!(sand * 4 < 44 * 64, "{sand} sand cells off the beach");
+
+        // The whole square counts, across the 16-cell tiles of the beach mask.
+        assert!(editor.near_beach(7, 30, 4.0));
+        assert!(!editor.near_beach(8, 30, 4.0));
+        assert!(editor.near_beach(44, 36, 4.0), "diagonal corner");
+        assert!(!editor.near_beach(45, 36, 4.0));
+        assert!(!editor.near_beach(30, 30, 4.0));
+    }
+
+    #[test]
+    fn a_bounded_tree_clear_stops_at_its_columns() {
+        use crate::block_definitions::{OAK_LEAVES, OAK_LOG};
+        use crate::coordinate_system::geographic::LLBBox;
+        let bbox = XZBBox::rect_from_min_max(0, 0, 63, 15).unwrap();
+        let llbbox = LLBBox::new(54.6, 9.9, 54.61, 9.91).unwrap();
+        let mut editor =
+            WorldEditor::new(std::path::PathBuf::from("/dev/null/unused"), &bbox, llbbox);
+        // A hedge of touching crowns along x.
+        editor.set_block_absolute(OAK_LOG, 0, 1, 5, None, None);
+        for x in 0..64 {
+            editor.set_block_absolute(OAK_LEAVES, x, 2, 5, None, None);
+        }
+        clear_tree_within(&mut editor, 0, 1, 5, |x, _| x <= 20);
+        assert_eq!(editor.get_block_absolute(0, 1, 5), None);
+        assert_eq!(editor.get_block_absolute(20, 2, 5), None);
+        assert_eq!(editor.get_block_absolute(21, 2, 5), Some(OAK_LEAVES));
+        clear_tree_from(&mut editor, 21, 2, 5);
+        assert_eq!(editor.get_block_absolute(63, 2, 5), None);
+    }
+
+    #[test]
+    fn nibble_round_trip() {
+        let mut buf = vec![0u8; 4];
+        for (i, v) in [0u8, 6, 3, 1, 5, 2, 4, 0].iter().enumerate() {
+            nibble_set(&mut buf, i, *v);
+        }
+        for (i, v) in [0u8, 6, 3, 1, 5, 2, 4, 0].iter().enumerate() {
+            assert_eq!(nibble_get(&buf, i), *v);
+        }
+    }
+}
+
+#[cfg(test)]
+mod water_field_traversal_tests {
+    use super::*;
+    use crate::ground::test_support::ground_with_land_cover_and_elevation;
+    use crate::land_cover::LandCoverData;
+
+    const SIDE: usize = 48;
+
+    fn ground_from(grid: Vec<Vec<u8>>) -> Ground {
+        let (w, h) = (grid[0].len(), grid.len());
+        let lc = LandCoverData {
+            grid,
+            water_distance: vec![vec![0u8; w]; h],
+            water_blend_cache: once_cell::sync::OnceCell::new(),
+            beach_tiles: once_cell::sync::OnceCell::new(),
+            inland_water: Default::default(),
+            width: w,
+            height: h,
+            cells_per_meter: 1.0,
+        };
+        ground_with_land_cover_and_elevation(lc, w, h)
+    }
+
+    fn water_grid(cells: impl Fn(usize, usize) -> bool) -> Vec<Vec<u8>> {
+        (0..SIDE)
+            .map(|z| {
+                (0..SIDE)
+                    .map(|x| if cells(x, z) { LC_WATER } else { 10 })
+                    .collect()
+            })
+            .collect()
+    }
+
+    /// Reference traversal: one growing index list per component, walked with a head
+    /// pointer, with the depths baked once the whole component has been collected.
+    fn single_pass_reference(
+        ground: &Ground,
+        xzbbox: &XZBBox,
+    ) -> (Vec<u8>, usize, usize, i32, i32) {
+        let (min_x, max_x) = (xzbbox.min_x(), xzbbox.max_x());
+        let (min_z, max_z) = (xzbbox.min_z(), xzbbox.max_z());
+        let (wmin_x, wmin_z, wmax_x, wmax_z) = match ground.lc_water_block_bounds() {
+            Some((lx, lz, hx, hz)) => (min_x + lx, min_z + lz, min_x + hx, min_z + hz),
+            None => return (Vec::new(), 0, 0, 0, 0),
+        };
+        let smin_x = (wmin_x - 1).max(min_x);
+        let smax_x = (wmax_x + 1).min(max_x);
+        let smin_z = (wmin_z - 1).max(min_z);
+        let smax_z = (wmax_z + 1).min(max_z);
+        let sw = (smax_x - smin_x + 1) as usize;
+        let sh = (smax_z - smin_z + 1) as usize;
+        let total = sw * sh;
+
+        let mut dt = vec![0u8; total];
+        for z in smin_z..=smax_z {
+            let row = (z - smin_z) as usize * sw;
+            for x in smin_x..=smax_x {
+                if ground.cover_class(XZPoint::new(x - min_x, z - min_z)) == LC_WATER {
+                    dt[row + (x - smin_x) as usize] = DT_MAX;
+                }
+            }
+        }
+        chamfer_3_4_dt(&mut dt, sw, sh);
+
+        let mut depth = vec![0u8; total.div_ceil(2)];
+        let mut visited = vec![0u64; total.div_ceil(64)];
+        let mut comp: Vec<u32> = Vec::new();
+        for start in 0..total {
+            if dt[start] == 0 || bit_get(&visited, start) {
+                continue;
+            }
+            comp.clear();
+            comp.push(start as u32);
+            bit_set(&mut visited, start);
+            let mut comp_max = 0u8;
+            let mut head = 0;
+            while head < comp.len() {
+                let idx = comp[head] as usize;
+                head += 1;
+                comp_max = comp_max.max(dt[idx]);
+                let i = idx % sw;
+                let j = idx / sw;
+                let mut visit = |n: usize, comp: &mut Vec<u32>| {
+                    if dt[n] != 0 && !bit_get(&visited, n) {
+                        bit_set(&mut visited, n);
+                        comp.push(n as u32);
+                    }
+                };
+                if i > 0 {
+                    visit(idx - 1, &mut comp);
+                }
+                if i + 1 < sw {
+                    visit(idx + 1, &mut comp);
+                }
+                if j > 0 {
+                    visit(idx - sw, &mut comp);
+                }
+                if j + 1 < sh {
+                    visit(idx + sw, &mut comp);
+                }
+            }
+            let cm = u16::from(comp_max);
+            for &c in &comp {
+                let idx = c as usize;
+                let x = smin_x + (idx % sw) as i32;
+                let z = smin_z + (idx / sw) as i32;
+                let d = ocean_depth_for_cell(x, z, u16::from(dt[idx]), cm);
+                nibble_set(&mut depth, idx, d as u8);
+            }
+        }
+        (depth, sw, sh, smin_x, smin_z)
+    }
+
+    fn assert_matches_reference(label: &str, grid: Vec<Vec<u8>>) -> BigWaterField {
+        let bbox = XZBBox::rect_from_min_max(0, 0, SIDE as i32 - 1, SIDE as i32 - 1).unwrap();
+        let ground = ground_from(grid);
+        let field = compute_big_water_field(&ground, &bbox);
+        let (depth, sw, sh, smin_x, smin_z) = single_pass_reference(&ground, &bbox);
+        assert_eq!((field.width, field.height), (sw, sh), "{label}: sub-rect");
+        assert_eq!(
+            (field.min_x, field.min_z),
+            (smin_x, smin_z),
+            "{label}: origin"
+        );
+        assert_eq!(field.depth, depth, "{label}: baked depths differ");
+        assert!(
+            depth.iter().any(|&b| b != 0),
+            "{label}: no depth was carved, the comparison is vacuous"
+        );
+        field
+    }
+
+    #[test]
+    fn frontier_walk_bakes_the_same_depths_as_the_single_pass_walk() {
+        assert_matches_reference(
+            "one open lake",
+            water_grid(|x, z| (8..40).contains(&x) && (8..40).contains(&z)),
+        );
+
+        assert_matches_reference(
+            "two components of different size",
+            water_grid(|x, z| {
+                ((2..22).contains(&x) && (2..22).contains(&z))
+                    || ((30..44).contains(&x) && (30..44).contains(&z))
+            }),
+        );
+
+        // Diagonal-only contact: 4-connectivity must keep these two components apart,
+        // so each keeps its own comp_max and its own depth tier.
+        assert_matches_reference(
+            "diagonally touching bodies",
+            water_grid(|x, z| {
+                ((2..24).contains(&x) && (2..24).contains(&z))
+                    || ((24..46).contains(&x) && (24..46).contains(&z))
+            }),
+        );
+
+        // A ring around an island, plus a corridor: the re-walk has to reach every cell
+        // through a shape where a level frontier and a head-pointer queue diverge in order.
+        assert_matches_reference(
+            "ring with an island and a corridor",
+            water_grid(|x, z| {
+                let ring = (4..36).contains(&x)
+                    && (4..36).contains(&z)
+                    && !((14..26).contains(&x) && (14..26).contains(&z));
+                let corridor = (36..46).contains(&x) && (18..22).contains(&z);
+                ring || corridor
+            }),
+        );
+    }
+
+    #[test]
+    fn a_second_body_does_not_change_the_first_ones_depths() {
+        let lone = assert_matches_reference(
+            "lone lake",
+            water_grid(|x, z| (2..22).contains(&x) && (2..22).contains(&z)),
+        );
+        let paired = assert_matches_reference(
+            "same lake beside a larger one",
+            water_grid(|x, z| {
+                ((2..22).contains(&x) && (2..22).contains(&z))
+                    || ((26..46).contains(&x) && (26..46).contains(&z))
+            }),
+        );
+        for z in 2..22 {
+            for x in 2..22 {
+                assert_eq!(
+                    lone.depth_at(x, z),
+                    paired.depth_at(x, z),
+                    "cell ({x},{z}) changed when an unrelated component was added"
+                );
+            }
+        }
+    }
+}
