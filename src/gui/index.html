@@ -7,11 +7,14 @@
   <link rel="stylesheet" href="./css/settings.css" />
   <link rel="stylesheet" href="./css/dialogs.css" />
   <link rel="stylesheet" href="./css/preview3d.css" />
+  <link rel="stylesheet" href="./css/mobile.css" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Arnis</title>
   <!-- Not deferred: the map iframe starts posting log messages as soon as it
        parses, so the bridge has to be listening before that element exists. -->
   <script src="./js/logging.js"></script>
+  <!-- Android build: prepares localStorage before main.js runs (Java only, no telemetry). -->
+  <script src="./js/android.js"></script>
   <script src="./js/preview3d.js" defer></script>
   <script type="module" src="./js/main.js" defer></script>
   <script type="module" src="./js/license.js" defer></script>

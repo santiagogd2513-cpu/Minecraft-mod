@@ -1,0 +1,95 @@
+name: Arnis Android APK
+
+on:
+  push:
+    branches: [ "**" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      NDK_VERSION: "27.2.12479018"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Liberar espacio en disco
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" || true
+          df -h /
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Android NDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;${NDK_VERSION}" > /dev/null
+          echo "NDK_HOME=$ANDROID_HOME/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: android-aarch64
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Tauri CLI
+        run: npm install -g @tauri-apps/cli@2.11
+
+      - name: Generar proyecto Android
+        run: |
+          tauri android init --ci
+          tauri icon assets/icons/icon.png
+          bash android/patch-android-project.sh
+
+      - name: Compilar APK (arm64)
+        run: tauri android build --ci --apk --target aarch64
+
+      - name: Firmar APK
+        run: |
+          UNSIGNED=$(find gen/android/app/build/outputs/apk -name '*.apk' | head -1)
+          echo "APK sin firmar: $UNSIGNED"
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          "$BT/zipalign" -p -f 4 "$UNSIGNED" aligned.apk
+          "$BT/apksigner" sign --ks android/signing/arnis-personal.keystore \
+            --ks-pass pass:arnis-android --key-pass pass:arnis-android --ks-key-alias arnis \
+            --out "Arnis-Android-${{ github.run_number }}.apk" aligned.apk
+          "$BT/apksigner" verify --print-certs "Arnis-Android-${{ github.run_number }}.apk" | head -3
+          cp "Arnis-Android-${{ github.run_number }}.apk" Arnis-Android.apk
+          ls -lh *.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Arnis-Android
+          path: Arnis-Android-${{ github.run_number }}.apk
+
+      - name: Publicar en Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-${{ github.run_number }}
+          name: "Arnis Android #${{ github.run_number }}"
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          body: |
+            Port personal de Arnis 3.4.0 para Android (arm64, Android 7+). Solo mundos de Minecraft Java.
+
+            Instala `Arnis-Android.apk`, elige un área en el mapa y pulsa **Start Generation**.
+            El mundo se guarda en **Descargas/Arnis** (carpeta y .zip).
+          files: |
+            Arnis-Android-${{ github.run_number }}.apk
+            Arnis-Android.apk

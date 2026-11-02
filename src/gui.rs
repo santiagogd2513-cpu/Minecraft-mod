@@ -17,6 +17,7 @@ use colored::Colorize;
 use fastnbt::Value;
 use flate2::read::GzDecoder;
 use log::LevelFilter;
+#[cfg(not(target_os = "android"))]
 use rfd::FileDialog;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -157,6 +158,12 @@ pub fn run_gui() -> Result<(), String> {
 /// Checks standard install paths including Flatpak on Linux.
 /// Falls back to Desktop, then current directory.
 fn detect_minecraft_saves_directory() -> PathBuf {
+    // On Android worlds go to Download/Arnis (see crate::android).
+    #[cfg(target_os = "android")]
+    {
+        return crate::android::default_saves_dir();
+    }
+
     // Try standard Minecraft saves directories per OS
     let mc_saves: Option<PathBuf> = if cfg!(target_os = "windows") {
         env::var("APPDATA")
@@ -341,11 +348,22 @@ fn gui_set_telemetry_consent(consent: bool) {
 /// Opens a native folder-picker dialog and returns the chosen path.
 #[tauri::command]
 fn gui_pick_save_directory(start_path: String) -> Result<String, String> {
+    // Android has no native folder picker reachable from Rust; keep Download/Arnis.
+    #[cfg(target_os = "android")]
+    {
+        let _ = &start_path;
+        return Ok(crate::android::default_saves_dir().display().to_string());
+    }
+
+    #[cfg(not(target_os = "android"))]
     let start = PathBuf::from(&start_path);
+    #[cfg(not(target_os = "android"))]
     let mut dialog = FileDialog::new();
+    #[cfg(not(target_os = "android"))]
     if start.is_dir() {
         dialog = dialog.set_directory(&start);
     }
+    #[cfg(not(target_os = "android"))]
     match dialog.pick_folder() {
         Some(folder) => Ok(folder.display().to_string()),
         None => Ok(start_path),
@@ -806,6 +824,8 @@ fn gui_get_platform() -> &'static str {
         "macos"
     } else if cfg!(target_os = "linux") {
         "linux"
+    } else if cfg!(target_os = "android") {
+        "android"
     } else {
         "unknown"
     }
@@ -1169,6 +1189,10 @@ fn gui_get_one_world_overlays(world_path: String) -> Result<Option<OneWorldOverl
 /// "cannot find" error on unsynced/placeholder files. Directories always open in Explorer.
 #[tauri::command]
 fn gui_show_in_folder(path: String) -> Result<(), String> {
+    // On Android the frontend shows where the world was saved; there is no explorer.
+    #[cfg(target_os = "android")]
+    let _ = &path;
+
     #[cfg(target_os = "windows")]
     {
         // OneDrive files can be cloud placeholders / mid-sync that `start` can't launch

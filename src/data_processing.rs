@@ -2526,6 +2526,19 @@ pub fn generate_world_with_options(
         }
     }
 
+    // On Android, pack the Java world into a .zip next to its folder (Download/Arnis) and
+    // tell the GUI where it is, since there is no file explorer to open.
+    #[cfg(target_os = "android")]
+    if world_format == WorldFormat::JavaAnvil {
+        match crate::android::zip_world(&output_path) {
+            Ok(zip_path) => emit_show_in_folder(&crate::android::friendly_path(&zip_path)),
+            Err(e) => {
+                eprintln!("Warning: could not create the world .zip: {e}");
+                emit_show_in_folder(&crate::android::friendly_path(&output_path));
+            }
+        }
+    }
+
     // For Java worlds saved to the Desktop (GUI falls back there when .minecraft/saves
     // is missing), open the folder in the file explorer so the user can find the world.
     if world_format == WorldFormat::JavaAnvil {

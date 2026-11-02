@@ -1,3 +1,16 @@
+> ## 📱 Port personal para Android
+>
+> Esta copia de Arnis 3.4.0 está adaptada para compilarse como **APK de Android** (uso personal,
+> no oficial). GitHub Actions (`.github/workflows/android.yml`) genera el APK en cada cambio y lo
+> publica en **Releases** como `Arnis-Android.apk`.
+>
+> - Solo mundos de **Minecraft Java Edition**. Se guardan en **Descargas/Arnis**, como carpeta y como `.zip`.
+> - Interfaz adaptada al celular y siempre en modo oscuro. La telemetría está desactivada.
+> - Cambios principales: `src/lib.rs` (antes `main.rs`), `src/android.rs`, `src/gui/css/mobile.css`,
+>   `src/gui/js/android.js`, `tauri.android.conf.json` y la carpeta `android/`.
+>
+> Proyecto original: [louis-e/arnis](https://github.com/louis-e/arnis) (licencia Apache-2.0).
+
 <img src="assets/git/banner.png" width="100%" alt="Banner">
 
 # Arnis [![CI Build Status](https://github.com/louis-e/arnis/actions/workflows/ci-build.yml/badge.svg)](https://github.com/louis-e/arnis/actions) [<img alt="GitHub Release" src="https://img.shields.io/github/v/release/louis-e/arnis" />](https://github.com/louis-e/arnis/releases) [<img alt="GitHub Downloads (all assets, all releases" src="https://img.shields.io/github/downloads/louis-e/arnis/total" />](https://github.com/louis-e/arnis/releases) [![Download here](https://img.shields.io/badge/Download-here-green)](https://github.com/louis-e/arnis/releases) [![Discord](https://img.shields.io/discord/1326192999738249267?label=Discord&color=%237289da)](https://discord.gg/mA2g69Fhxq)

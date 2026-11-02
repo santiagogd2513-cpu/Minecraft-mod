@@ -1,0 +1,161 @@
+/* Phone layout for the Android build (and any narrow window).
+   Loaded last so it only overrides what the desktop styles set. */
+
+/* ---------- Android-only tweaks (any screen size) ---------- */
+.arnis-android #format-bedrock,
+.arnis-android #format-luanti {
+  display: none !important;
+}
+
+.arnis-android #format-java {
+  flex: 1;
+  border-radius: 8px;
+}
+
+/* Upstream update notices point to desktop downloads. */
+.arnis-android .footer {
+  display: none;
+}
+
+.android-saved {
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(76, 175, 80, 0.16);
+  border: 1px solid rgba(76, 175, 80, 0.55);
+  color: #ececec;
+  text-align: left;
+  font-size: 0.92em;
+  word-break: break-word;
+}
+
+.android-saved strong {
+  color: #8bd48e;
+  font-size: 1.05em;
+}
+
+.android-saved-hint {
+  opacity: 0.8;
+  font-size: 0.9em;
+}
+
+/* ---------- Narrow screens: stack map and controls ---------- */
+@media (max-width: 760px) {
+  html, body {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .container {
+    height: 100dvh;
+    padding: max(6px, env(safe-area-inset-top)) 10px max(8px, env(safe-area-inset-bottom));
+  }
+
+  .logo {
+    height: 2.6em;
+    padding: 0.1em 0 0.2em;
+  }
+
+  #arnis-logo {
+    width: auto !important;
+    max-width: 55vw;
+  }
+
+  .flex-container {
+    flex-direction: column;
+    gap: 10px;
+    min-height: 0;
+    margin-top: 2px;
+  }
+
+  .map-box {
+    width: 100%;
+    min-height: 0;
+    flex: 1 1 auto;
+  }
+
+  .controls-box {
+    width: 100%;
+    flex: 0 0 auto;
+    max-height: 46dvh;
+    overflow-y: auto;
+  }
+
+  .controls-content {
+    height: auto;
+    gap: 8px;
+  }
+
+  .bbox-selection-text {
+    font-size: 0.85em;
+  }
+
+  /* Big, thumb-friendly start button */
+  .start-button {
+    min-height: 54px;
+    font-size: 1.05em;
+  }
+
+  .preview3d-mini {
+    max-height: 120px;
+  }
+
+  .footer {
+    display: none;
+  }
+
+  /* Dialogs never wider than the screen */
+  .modal-content,
+  .dialog {
+    width: calc(100vw - 24px) !important;
+    max-width: calc(100vw - 24px) !important;
+    max-height: calc(100dvh - 24px);
+    box-sizing: border-box;
+  }
+
+  /* ---------- Settings: sidebar becomes a top strip ---------- */
+  .settings-page {
+    flex-direction: column;
+  }
+
+  .settings-sidebar {
+    width: 100%;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    padding: max(8px, env(safe-area-inset-top)) 10px 8px;
+    border-right: none;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.25);
+  }
+
+  .settings-brand {
+    display: none;
+  }
+
+  .settings-nav {
+    display: flex;
+    flex-direction: row;
+    gap: 4px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .settings-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .settings-page .settings-nav-item {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .settings-row {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
