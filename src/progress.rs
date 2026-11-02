@@ -131,6 +131,11 @@ pub fn emit_gui_error(message: &str) {
     // status bar receives an error containing multi-byte UTF-8. e.g.
     // localized OS error messages like "Недостаточно системных ресурсов…"
     // where byte 35 lands inside a Cyrillic character.
+    // On Android the status line wraps over several lines, so show the whole cause:
+    // a phone has no terminal where the rest of the message could be read.
+    #[cfg(target_os = "android")]
+    const MAX_CHARS: usize = 400;
+    #[cfg(not(target_os = "android"))]
     const MAX_CHARS: usize = 35;
     let truncated: String = message.chars().take(MAX_CHARS).collect();
     emit_gui_progress_update(0.0, &format!("Error! {truncated}"));

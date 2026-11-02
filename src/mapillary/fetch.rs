@@ -358,7 +358,7 @@ struct Http {
 
 impl Http {
     fn new(cfg: &FetchConfig) -> Result<Self, String> {
-        let client = reqwest::blocking::Client::builder()
+        let client = crate::net::android_tls(reqwest::blocking::Client::builder())
             .connect_timeout(CONNECT_TIMEOUT)
             .timeout(READ_TIMEOUT)
             .user_agent(crate::retrieve_data::OSM_USER_AGENT)
@@ -1453,7 +1453,7 @@ pub fn fetch_osm(cfg: &FetchConfig) -> Result<Value, String> {
         b.min_lat, b.min_lon, b.max_lat, b.max_lon
     );
 
-    let client = reqwest::blocking::Client::builder()
+    let client = crate::net::android_tls(reqwest::blocking::Client::builder())
         .connect_timeout(CONNECT_TIMEOUT)
         .timeout(Duration::from_secs(120))
         .user_agent(crate::retrieve_data::OSM_USER_AGENT)

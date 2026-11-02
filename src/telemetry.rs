@@ -36,7 +36,7 @@ const TELEMETRY_TIMEOUT: Duration = Duration::from_secs(15);
 const CRASH_REPORT_TIMEOUT: Duration = Duration::from_secs(10);
 
 fn build_client(timeout: Duration) -> Result<Client, reqwest::Error> {
-    Client::builder().timeout(timeout).build()
+    crate::net::android_tls(Client::builder()).timeout(timeout).build()
 }
 
 /// Ceiling on log sends in flight; extra messages are dropped, not queued. Logs

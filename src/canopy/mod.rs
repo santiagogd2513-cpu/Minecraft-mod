@@ -664,7 +664,7 @@ pub fn fetch_canopy_data(
     println!("Fetching canopy height data (Meta/WRI 1m global canopy height)...");
     prune_row_cache();
 
-    let client = reqwest::blocking::Client::builder()
+    let client = crate::net::android_tls(reqwest::blocking::Client::builder())
         .timeout(std::time::Duration::from_secs(90))
         .build()
         .ok()?;

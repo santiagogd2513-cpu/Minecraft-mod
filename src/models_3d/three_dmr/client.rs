@@ -65,7 +65,7 @@ fn client() -> Result<&'static Client, String> {
     static CLIENT: OnceLock<Result<Client, String>> = OnceLock::new();
     CLIENT
         .get_or_init(|| {
-            ClientBuilder::new()
+            crate::net::android_tls(ClientBuilder::new())
                 .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS))
                 .user_agent(concat!(
                     "Arnis/",

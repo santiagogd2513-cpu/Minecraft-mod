@@ -250,7 +250,7 @@ impl SourceWindow {
             }
         }
 
-        let client = reqwest::blocking::Client::builder()
+        let client = crate::net::android_tls(reqwest::blocking::Client::builder())
             .user_agent(concat!(
                 "Arnis/",
                 env!("CARGO_PKG_VERSION"),

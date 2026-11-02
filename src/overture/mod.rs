@@ -709,7 +709,7 @@ pub fn deduplicate_against_osm(
 
 /// Shared HTTP client for Overture fetches (generation and 3D preview paths).
 pub(crate) fn overture_client() -> Result<Client, Box<dyn std::error::Error>> {
-    Ok(Client::builder()
+    Ok(crate::net::android_tls(Client::builder())
         .timeout(Duration::from_secs(HTTP_TIMEOUT_SECS))
         .user_agent(concat!(
             "Arnis/",

@@ -459,7 +459,7 @@ pub fn fetch_land_cover_data(
         }
     }
 
-    let client = reqwest::blocking::Client::builder()
+    let client = crate::net::android_tls(reqwest::blocking::Client::builder())
         .timeout(std::time::Duration::from_secs(30))
         .build()
         .ok()?;

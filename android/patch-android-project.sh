@@ -28,6 +28,47 @@ for themes in gen/android/app/src/main/res/values/themes.xml gen/android/app/src
   sed -i 's/\.DayNight//g; s/\.Light\././g; s/\.Light"/"/g' "$themes"
 done
 
+# MainActivity: no edge-to-edge (the app starts below the status bar instead of under
+# the clock) and the WebView keeps its text at 100%, so a large system font size does
+# not break the one-screen layout.
+ACTIVITY=$(find gen/android/app/src/main/java -name MainActivity.kt | head -1)
+if [ -n "$ACTIVITY" ]; then
+  PKG=$(sed -n 's/^package \(.*\)$/\1/p' "$ACTIVITY" | head -1)
+  cat > "$ACTIVITY" <<KOTLIN
+package $PKG
+
+import android.os.Bundle
+import android.view.View
+import android.webkit.WebView
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+
+class MainActivity : TauriActivity() {
+  override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
+    // Android 15+ always draws apps edge to edge: keep the app clear of the status
+    // bar, the navigation bar and camera cutouts by padding the content view.
+    val root = findViewById<View>(android.R.id.content)
+    ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
+      val bars = insets.getInsets(
+        WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+      )
+      v.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+      WindowInsetsCompat.CONSUMED
+    }
+  }
+
+  override fun onWebViewCreate(webView: WebView) {
+    super.onWebViewCreate(webView)
+    // Keep text at 100% so a large system font does not break the layout.
+    webView.settings.textZoom = 100
+  }
+}
+KOTLIN
+  echo "--- MainActivity.kt ---"
+  cat "$ACTIVITY"
+fi
+
 echo "--- AndroidManifest.xml ---"
 cat "$MANIFEST"
 echo "--- themes ---"

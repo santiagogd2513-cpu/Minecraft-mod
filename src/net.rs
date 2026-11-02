@@ -136,3 +136,62 @@ mod tests {
         assert_eq!(in_flight(), 0);
     }
 }
+
+// ---------------------------------------------------------------------------
+// TLS roots on Android
+// ---------------------------------------------------------------------------
+//
+// reqwest verifies certificates with rustls-platform-verifier, which on Android needs a
+// Java component and an explicit JNI initialisation; without them the first HTTPS
+// request panics ("Expect rustls-platform-verifier to be initialized"). On Android
+// every client is therefore built with the Mozilla root certificates bundled in
+// `webpki-root-certs` instead. Elsewhere this is a no-op.
+
+/// Applies the Android TLS configuration to a reqwest client builder.
+pub trait AndroidTls: Sized {
+    fn android_tls(self) -> Self;
+}
+
+#[cfg(target_os = "android")]
+fn bundled_roots() -> Vec<reqwest::Certificate> {
+    static ROOTS: std::sync::OnceLock<Vec<reqwest::Certificate>> = std::sync::OnceLock::new();
+    ROOTS
+        .get_or_init(|| {
+            webpki_root_certs::TLS_SERVER_ROOT_CERTS
+                .iter()
+                .filter_map(|der| reqwest::Certificate::from_der(der.as_ref()).ok())
+                .collect()
+        })
+        .clone()
+}
+
+impl AndroidTls for reqwest::ClientBuilder {
+    fn android_tls(self) -> Self {
+        #[cfg(target_os = "android")]
+        {
+            self.tls_certs_only(bundled_roots())
+        }
+        #[cfg(not(target_os = "android"))]
+        {
+            self
+        }
+    }
+}
+
+impl AndroidTls for reqwest::blocking::ClientBuilder {
+    fn android_tls(self) -> Self {
+        #[cfg(target_os = "android")]
+        {
+            self.tls_certs_only(bundled_roots())
+        }
+        #[cfg(not(target_os = "android"))]
+        {
+            self
+        }
+    }
+}
+
+/// `crate::net::android_tls(Client::builder())`: the builder with Android TLS roots.
+pub fn android_tls<B: AndroidTls>(builder: B) -> B {
+    builder.android_tls()
+}

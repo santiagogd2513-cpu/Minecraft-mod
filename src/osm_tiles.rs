@@ -188,7 +188,7 @@ fn cache_root_for(base_url: &str) -> Option<PathBuf> {
 }
 
 fn client() -> Result<Client> {
-    Client::builder()
+    crate::net::android_tls(Client::builder())
         // A host that never answers would otherwise hold off the Overpass fallback for 2 min.
         .connect_timeout(Duration::from_secs(15))
         .timeout(Duration::from_secs(120))

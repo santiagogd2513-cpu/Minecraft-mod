@@ -86,6 +86,10 @@ quick-xml = "0.41.0"
 mimalloc = "0.1"
 rfd = { version = "0.17.2", optional = true }
 
+# Android: TLS root certificates bundled in the app (see src/net.rs).
+[target.'cfg(target_os = "android")'.dependencies]
+webpki-root-certs = "1"
+
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62.0", features = ["Win32_System_Console"] }
 

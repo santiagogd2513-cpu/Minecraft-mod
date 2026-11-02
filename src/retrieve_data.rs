@@ -47,7 +47,7 @@ fn download_with_reqwest(
     timeout_secs: u64,
 ) -> Result<String, Box<dyn std::error::Error>> {
     // reqwest's `gzip` feature sets Accept-Encoding and decodes; setting it here disables that.
-    let client: Client = ClientBuilder::new()
+    let client: Client = crate::net::android_tls(ClientBuilder::new())
         .timeout(Duration::from_secs(timeout_secs))
         .user_agent(OSM_USER_AGENT)
         .build()?;
@@ -635,7 +635,7 @@ pub fn fetch_data_from_overpass(
 
 /// Fetches a short area name using Nominatim for the given lat/lon
 pub fn fetch_area_name(lat: f64, lon: f64) -> Result<Option<String>, Box<dyn std::error::Error>> {
-    let client = Client::builder()
+    let client = crate::net::android_tls(Client::builder())
         .timeout(Duration::from_secs(20))
         .user_agent(OSM_USER_AGENT)
         .build()?;

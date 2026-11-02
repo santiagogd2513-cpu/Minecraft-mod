@@ -46,7 +46,7 @@ pub struct UpdateInfo {
 }
 
 fn build_client() -> reqwest::Result<Client> {
-    Client::builder()
+    crate::net::android_tls(Client::builder())
         .user_agent(concat!(
             "Arnis/",
             env!("CARGO_PKG_VERSION"),

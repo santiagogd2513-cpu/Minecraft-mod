@@ -125,7 +125,7 @@ impl RawImage {
 }
 
 fn client(timeout: Duration) -> Result<reqwest::blocking::Client, String> {
-    reqwest::blocking::Client::builder()
+    crate::net::android_tls(reqwest::blocking::Client::builder())
         .timeout(timeout)
         .user_agent(crate::retrieve_data::OSM_USER_AGENT)
         .build()
