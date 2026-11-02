@@ -13,6 +13,12 @@ add_permission() {
 }
 add_permission 'android.permission.INTERNET' '<uses-permission android:name="android.permission.INTERNET" />'
 add_permission 'android.permission.WRITE_EXTERNAL_STORAGE' '<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />'
+# Location for the "Mi ubicación" map button. The WebView (wry) asks for it at runtime
+# the first time the page calls navigator.geolocation.
+add_permission 'android.permission.ACCESS_COARSE_LOCATION' '<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />'
+add_permission 'android.permission.ACCESS_FINE_LOCATION' '<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />'
+grep -q 'android.hardware.location.gps' "$MANIFEST" || \
+  sed -i 's#<application#<uses-feature android:name="android.hardware.location.gps" android:required="false" />\n    <application#' "$MANIFEST"
 grep -q 'requestLegacyExternalStorage' "$MANIFEST" || \
   sed -i 's#<application#<application android:requestLegacyExternalStorage="true"#' "$MANIFEST"
 

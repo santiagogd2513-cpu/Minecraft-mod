@@ -2067,6 +2067,79 @@ $(document).ready(function () {
         syncBodyToggleButton();
     })();
 
+    // "My location": centres the map on the device's position (GPS on Android) and
+    // selects an area around it, so the user's own street can be generated in one tap.
+    (function addLocateButton() {
+        var drawContainer = document.querySelector('.leaflet-draw');
+        if (!drawContainer || !navigator.geolocation) return;
+
+        // Half the side of the selected square, in metres (about 300 x 300 blocks).
+        var HALF_SIZE_M = 150;
+        var youAreHere = null;
+
+        var section = L.DomUtil.create('div', 'leaflet-draw-section', drawContainer);
+        var bar = L.DomUtil.create('div', 'leaflet-draw-toolbar leaflet-bar', section);
+        var btn = L.DomUtil.create('a', 'leaflet-draw-edit-locate', bar);
+        btn.href = '#';
+        btn.id = 'locate-btn';
+        btn.title = 'Mi ubicación';
+        btn.setAttribute('aria-label', 'Mi ubicación');
+
+        function toast(text, isError) {
+            var el = document.getElementById('locate-toast');
+            if (!el) {
+                el = L.DomUtil.create('div', 'locate-toast', map.getContainer());
+                el.id = 'locate-toast';
+            }
+            el.textContent = text;
+            el.classList.toggle('error', !!isError);
+            el.style.display = 'block';
+            clearTimeout(el._hideTimer);
+            el._hideTimer = setTimeout(function () { el.style.display = 'none'; }, isError ? 6000 : 3500);
+        }
+
+        function onPosition(pos) {
+            btn.classList.remove('locating');
+            var lat = pos.coords.latitude;
+            var lng = pos.coords.longitude;
+            var dLat = HALF_SIZE_M / 111320;
+            var dLng = HALF_SIZE_M / (111320 * Math.max(Math.cos(lat * Math.PI / 180), 0.01));
+
+            if (youAreHere) map.removeLayer(youAreHere);
+            youAreHere = L.circleMarker([lat, lng], {
+                radius: 8, color: '#ffffff', weight: 3, fillColor: '#3778d4', fillOpacity: 1
+            }).addTo(map);
+
+            applyBboxFromParent([lat - dLat, lng - dLng, lat + dLat, lng + dLng]);
+            map.fitBounds([[lat - dLat, lng - dLng], [lat + dLat, lng + dLng]], { padding: [30, 30] });
+            toast('📍 Área de unos 300 m alrededor de ti. Ajusta las esquinas si quieres más o menos.');
+        }
+
+        function onError(err) {
+            btn.classList.remove('locating');
+            var msg = 'No se pudo obtener tu ubicación.';
+            if (err && err.code === 1) msg = 'Permiso de ubicación denegado. Actívalo en Ajustes > Apps > Arnis > Permisos.';
+            else if (err && err.code === 2) msg = 'Ubicación no disponible. Activa el GPS e inténtalo de nuevo.';
+            else if (err && err.code === 3) msg = 'La ubicación tardó demasiado. Inténtalo de nuevo al aire libre.';
+            toast(msg, true);
+        }
+
+        L.DomEvent
+            .on(btn, 'mousedown dblclick', L.DomEvent.stopPropagation)
+            .on(btn, 'click', L.DomEvent.stop)
+            .on(btn, 'click', function () {
+                if (currentBody !== 'earth') {
+                    changeBody('earth');
+                    window.parent.postMessage({ type: 'bodyChanged', body: currentBody }, '*');
+                }
+                btn.classList.add('locating');
+                toast('Buscando tu ubicación…');
+                navigator.geolocation.getCurrentPosition(onPosition, onError, {
+                    enableHighAccuracy: true, timeout: 20000, maximumAge: 60000
+                });
+            });
+    })();
+
     // Leaflet.draw's own buttons came with English titles; every button is
     // labelled from its description now.
     refreshMapToolLabels();
