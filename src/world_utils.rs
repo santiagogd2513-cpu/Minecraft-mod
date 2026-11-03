@@ -482,6 +482,14 @@ impl RunSizeError {
     /// Fits the GUI's status line.
     #[cfg_attr(not(any(feature = "gui", test)), allow(dead_code))]
     pub fn short(&self) -> &'static str {
+        if cfg!(target_os = "android") {
+            // La app de Android está en español
+            return if self.area {
+                "Área muy grande: máx. 400 km²."
+            } else {
+                "No hay espacio suficiente."
+            };
+        }
         if self.area {
             retrieve_data::AREA_TOO_LARGE
         } else {
@@ -489,6 +497,10 @@ impl RunSizeError {
         }
     }
 }
+
+/// Área máxima que se puede generar en Android (km²).
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub const ANDROID_MAX_AREA_KM2: f64 = 400.0;
 
 /// Refuses a run the tile archive or the disk cannot take. Wants the run's final `args` and
 /// `bbox`, so a One World's own scale and frame and every option override are counted.
@@ -500,6 +512,19 @@ pub fn check_run_size(
 ) -> Result<(), RunSizeError> {
     if args.mapillary_probe {
         return Ok(());
+    }
+    // En el celular el máximo es 400 km² (más que eso se queda sin memoria).
+    #[cfg(target_os = "android")]
+    {
+        let km2 = bbox.area_km2();
+        if km2 > ANDROID_MAX_AREA_KM2 {
+            return Err(RunSizeError {
+                area: true,
+                detail: format!(
+                    "El área mide {km2:.0} km²; en el celular el máximo es {ANDROID_MAX_AREA_KM2:.0} km². Elige un área más pequeña."
+                ),
+            });
+        }
     }
     let from_archive = !args.skip_osm()
         && args.file.is_none()

@@ -160,6 +160,28 @@
     return m >= 1000 ? fmt(m / 1000, 2) + " km" : fmt(Math.round(m), 0) + " m";
   }
 
+  // Máximo que aguanta el celular: más que esto se queda sin memoria.
+  const MAX_KM2 = 400;
+  let lastKm2 = 0;
+
+  /** Bloquea "Generar mundo" si el área pasa del máximo. */
+  function updateStartLock(km2) {
+    const btn = document.getElementById("start-button");
+    if (!btn) return;
+    const tooBig = km2 > MAX_KM2;
+    btn.classList.toggle("area-locked", tooBig);
+    btn.setAttribute("aria-disabled", tooBig ? "true" : "false");
+  }
+
+  // Por si otro código vuelve a habilitar el botón: se frena el toque antes de que llegue.
+  document.addEventListener("click", function (e) {
+    const btn = e.target && e.target.closest ? e.target.closest("#start-button") : null;
+    if (btn && lastKm2 > MAX_KM2 && readBBox()) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    }
+  }, true);
+
   let lastDetails = "";
   function refreshDetails() {
     const box = document.getElementById("android-area-details");
@@ -178,12 +200,19 @@
         '<span class="area-main">📐 <b>' + km2Text + " km²</b></span>" +
         '<span class="area-sub">' + lengthText(w) + " × " + lengthText(h) +
         " · ≈ " + fmt(Math.round(w), 0) + " × " + fmt(Math.round(h), 0) + " bloques</span>";
-      if (km2 > 25) html += '<span class="area-warn">⚠️ Área grande: en el celular puede tardar mucho o quedarse sin memoria.</span>';
+      lastKm2 = km2;
+      if (km2 > MAX_KM2) {
+        html += '<span class="area-error">⛔ El máximo es ' + MAX_KM2 + ' km². Te pasaste por ' +
+          fmt(km2 - MAX_KM2, km2 - MAX_KM2 < 10 ? 2 : 0) + ' km²: haz el área más pequeña.</span>';
+      } else if (km2 > 100) {
+        html += '<span class="area-warn">⚠️ Área grande: puede tardar bastante (máximo ' + MAX_KM2 + ' km²).</span>';
+      }
     }
     if (html !== lastDetails) {
       box.innerHTML = html;
       lastDetails = html;
     }
+    updateStartLock(b ? lastKm2 : 0);
     if (!generating) {
       setPeek(b ? "📐 " + box.querySelector(".area-main b").textContent + " seleccionados · desliza para generar"
                 : "Desliza hacia arriba para ver las opciones");

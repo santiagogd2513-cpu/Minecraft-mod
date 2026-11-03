@@ -544,3 +544,16 @@
     width: 100%;
   }
 }
+
+/* Área por encima del máximo del celular */
+.android-area .area-error {
+  display: block;
+  color: #ff7a7a;
+  font-weight: 600;
+  margin-top: 6px;
+}
+#start-button.area-locked {
+  opacity: 0.45;
+  filter: grayscale(0.6);
+  pointer-events: auto;
+}
