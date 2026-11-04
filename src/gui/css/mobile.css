@@ -442,19 +442,65 @@
   box-shadow: none;
 }
 
-/* ---------- Settings page and dialogs on a phone ---------- */
+/* ---------- Settings page on a phone ----------
+   Layout, top to bottom: a slim title bar, a row of section chips (with the
+   reset button at its end), and one scrolling column of full-width settings.
+   .settings-main is flattened with display: contents so its title bar can sit
+   above the chips; only .settings-scrollable scrolls. */
 .arnis-android .settings-page {
   flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.arnis-android .settings-main {
+  display: contents;
+}
+
+.arnis-android .settings-page .settings-topbar {
+  order: 0;
+  gap: 10px;
+  padding: max(10px, env(safe-area-inset-top)) 10px 8px 16px;
+  border-bottom: none;
+}
+
+.arnis-android .settings-page .settings-topbar-icon,
+.arnis-android .settings-page .settings-topbar p {
+  display: none;
+}
+
+.arnis-android .settings-page .settings-topbar h2 {
+  font-size: 19px;
+  line-height: 1.25;
+}
+
+.arnis-android .settings-page .settings-close {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .arnis-android .settings-sidebar {
+  order: 1;
+  flex: 0 0 auto;
   width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   flex-direction: row;
   align-items: center;
-  gap: 8px;
-  padding: max(8px, env(safe-area-inset-top)) 10px 8px;
+  gap: 6px;
+  padding: 2px 10px 10px;
   border-right: none;
   border-bottom: 1px solid var(--a-border);
+}
+
+.arnis-android .settings-page .settings-scrollable {
+  order: 2;
+  flex: 1 1 auto;
+  min-height: 0;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .arnis-android .settings-brand {
@@ -462,43 +508,262 @@
 }
 
 .arnis-android .settings-nav {
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   flex-direction: row;
-  gap: 4px;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
+  scroll-snap-type: x proximity;
+  -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 24px), transparent);
+  mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 24px), transparent);
 }
 
 .arnis-android .settings-nav::-webkit-scrollbar {
   display: none;
 }
 
+/* Section chips: icon + name, no subtitle */
 .arnis-android .settings-page .settings-nav-item {
+  position: relative;
   flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  min-height: 38px;
+  margin: 0;
+  padding: 0 12px;
+  border: 1px solid var(--ui-tile-border, rgba(255, 255, 255, 0.1));
+  border-radius: 999px;
+  background: var(--ui-tile, rgba(255, 255, 255, 0.04));
+  white-space: nowrap;
+  scroll-snap-align: start;
+}
+
+.arnis-android .settings-page .settings-nav-item::before {
+  display: none;
+}
+
+.arnis-android .settings-page .settings-nav-item .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.arnis-android .settings-page .settings-nav-item .settings-nav-sub {
+  display: none;
+}
+
+.arnis-android .settings-page .settings-nav-item .settings-nav-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.arnis-android .settings-page .settings-nav-item .settings-nav-dot {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  margin: 0;
+}
+
+.arnis-android .settings-page .settings-nav-item.active {
+  border-color: var(--ui-accent);
+  background: rgba(254, 204, 68, 0.12);
+  color: var(--ui-accent);
+}
+
+/* Reset: a round icon button at the end of the chip row; the label only
+   shows while it asks for confirmation. */
+.arnis-android .settings-page .settings-reset-button {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 38px;
+  height: 38px;
+  margin: 0;
+  padding: 0 10px;
+  border-radius: 999px;
+}
+
+.arnis-android .settings-page .settings-reset-button:not(.is-confirming) .settings-reset-label {
+  display: none;
+}
+
+.arnis-android .settings-page .settings-reset-button.is-confirming .settings-reset-label {
+  font-size: 12.5px;
   white-space: nowrap;
 }
 
-.arnis-android .settings-row {
-  flex-wrap: wrap;
+/* Content: one column, tighter padding */
+.arnis-android .settings-content {
+  gap: 14px;
+  padding: 12px 10px calc(28px + env(safe-area-inset-bottom));
+}
+
+.arnis-android .settings-section {
+  padding: 14px 12px;
+  border-radius: 14px;
+  scroll-margin-top: 8px;
+}
+
+.arnis-android .settings-section-head {
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.arnis-android .settings-section-head h3 {
+  font-size: 16.5px;
+}
+
+.arnis-android .setting-grid {
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
 }
 
-/* The label keeps a readable width; wide controls drop to their own line. */
-.arnis-android .settings-row .setting-label,
-.arnis-android .settings-row .setting-text {
-  flex: 1 1 170px;
+.arnis-android .settings-page .setting-tile {
+  min-height: 58px;
+  padding: 11px 12px;
+  gap: 12px;
+  border-radius: 12px;
+}
+
+.arnis-android .settings-row .setting-label {
+  flex: 1 1 auto;
   min-width: 0;
 }
 
-.arnis-android .settings-row .settings-control {
-  flex: 0 1 auto;
-  max-width: 100%;
+.arnis-android .setting-desc {
+  font-size: 12.5px;
 }
 
-.arnis-android .settings-row .segmented-control {
+/* A tile whose control is wide (choices, slider, list, text field, button)
+   puts the control on its own full-width line under the text. */
+.arnis-android .settings-page .setting-tile:has(.segmented-control),
+.arnis-android .settings-page .setting-tile:has(input[type="range"]),
+.arnis-android .settings-page .setting-tile:has(select),
+.arnis-android .settings-page .setting-tile:has(input[type="text"]),
+.arnis-android .settings-page .setting-tile:has(input[type="password"]),
+.arnis-android .settings-page .setting-tile:has(input[type="number"]),
+.arnis-android .settings-page .setting-tile:has(.clear-cache-button) {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.arnis-android .settings-page .setting-tile .settings-control {
+  flex: 0 0 auto;
   max-width: 100%;
-  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.arnis-android .settings-page .setting-tile:has(.segmented-control) .settings-control,
+.arnis-android .settings-page .setting-tile:has(input[type="range"]) .settings-control,
+.arnis-android .settings-page .setting-tile:has(select) .settings-control,
+.arnis-android .settings-page .setting-tile:has(input[type="text"]) .settings-control,
+.arnis-android .settings-page .setting-tile:has(input[type="password"]) .settings-control,
+.arnis-android .settings-page .setting-tile:has(input[type="number"]) .settings-control,
+.arnis-android .settings-page .setting-tile:has(.clear-cache-button) .settings-control {
+  width: 100%;
+  justify-content: stretch;
+}
+
+.arnis-android .settings-page .setting-tile .settings-control > select,
+.arnis-android .settings-page .setting-tile .settings-control > input[type="text"],
+.arnis-android .settings-page .setting-tile .settings-control > input[type="password"],
+.arnis-android .settings-page .setting-tile .settings-control > input[type="number"],
+.arnis-android .settings-page .setting-tile .settings-control > .clear-cache-button {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  box-sizing: border-box;
+}
+
+/* Sliders: a thick, easy-to-grab track with the value beside it */
+.arnis-android .settings-page .setting-tile input[type="range"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 32px;
+}
+
+/* Segmented choices: equal-width buttons filling the line */
+.arnis-android .settings-page .segmented-control:not(.choice-cards) {
+  display: flex;
+  flex-wrap: nowrap;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 3px;
+  border-radius: 11px;
+}
+
+.arnis-android .settings-page .segmented-control:not(.choice-cards) .segment {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 38px;
+  padding: 6px 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  white-space: normal;
+  line-height: 1.2;
+  border-radius: 8px;
+}
+
+/* Choice cards: one per line, icon on the left, text beside it */
+.arnis-android .settings-page .choice-cards,
+.arnis-android .settings-page #generation-mode-cards {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+.arnis-android .settings-page .choice-cards .segment {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 12px;
+  row-gap: 1px;
+  align-items: center;
+  padding: 11px 44px 11px 12px;
+  border-radius: 12px;
+}
+
+.arnis-android .settings-page .choice-cards .segment .icon {
+  grid-row: 1 / span 2;
+  margin: 0;
+  justify-self: center;
+}
+
+.arnis-android .settings-page .choice-cards .segment .choice-title {
+  align-self: end;
+}
+
+.arnis-android .settings-page .choice-cards .segment .choice-desc {
+  align-self: start;
+}
+
+.arnis-android .settings-page .choice-cards .segment::after {
+  top: 50%;
+  right: 14px;
+  margin-top: -9px;
+  width: 18px;
+  height: 18px;
+}
+
+.arnis-android .settings-page .setting-choice {
+  margin-bottom: 12px;
+}
+
+/* The active chip keeps its icon and dot in the accent colour */
+.arnis-android .settings-page .settings-nav-item.active .icon {
+  color: var(--ui-accent);
+}
+
+.arnis-android .settings-page .settings-nav-item.active .settings-nav-dot {
+  background: var(--ui-accent);
 }
 
 .arnis-android .modal-content,

@@ -22,7 +22,21 @@ let sections = [];
 // the next scroll the user makes themselves.
 let pinned = null;
 
+// On a phone the nav is a horizontal row of chips; keep the active one in view.
+let lastCentered = -1;
+function centerChip(index) {
+  if (index === lastCentered) return;
+  lastCentered = index;
+  const item = items[index];
+  const nav = item && item.parentElement;
+  if (!nav || nav.scrollWidth <= nav.clientWidth + 1) return;
+  const offset = item.getBoundingClientRect().left - nav.getBoundingClientRect().left;
+  const left = nav.scrollLeft + offset - (nav.clientWidth - item.offsetWidth) / 2;
+  nav.scrollTo({ left: Math.max(0, left), behavior: 'smooth' });
+}
+
 function setActive(index) {
+  centerChip(index);
   items.forEach((item, i) => {
     const on = i === index;
     item.classList.toggle('active', on);
