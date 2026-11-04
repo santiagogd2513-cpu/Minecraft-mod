@@ -22,6 +22,17 @@ grep -q 'android.hardware.location.gps' "$MANIFEST" || \
 grep -q 'requestLegacyExternalStorage' "$MANIFEST" || \
   sed -i 's#<application#<application android:requestLegacyExternalStorage="true"#' "$MANIFEST"
 
+# Nombre que se ve bajo el ícono: es una versión no oficial (como «Ventoy no oficial»)
+STRINGS=gen/android/app/src/main/res/values/strings.xml
+if [ -f "$STRINGS" ]; then
+  sed -i 's#<string name="app_name">[^<]*</string>#<string name="app_name">Arnis no oficial</string>#' "$STRINGS"
+  sed -i 's#<string name="main_activity_title">[^<]*</string>#<string name="main_activity_title">Arnis no oficial</string>#' "$STRINGS"
+else
+  # sin strings.xml: el nombre va directo en el manifiesto
+  sed -i 's#android:label="[^"]*"#android:label="Arnis no oficial"#g' "$MANIFEST"
+fi
+grep -q 'Arnis no oficial' "$STRINGS" "$MANIFEST" 2>/dev/null && echo "Nombre: Arnis no oficial"
+
 # Always dark, like the desktop app (the WebView follows the app theme's light/dark flag).
 for themes in gen/android/app/src/main/res/values/themes.xml gen/android/app/src/main/res/values-night/themes.xml; do
   [ -f "$themes" ] || continue

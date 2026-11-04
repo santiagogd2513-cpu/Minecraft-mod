@@ -82,11 +82,11 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: android-${{ github.run_number }}
-          name: "Arnis Android #${{ github.run_number }}"
+          name: "Arnis no oficial #${{ github.run_number }} (Android)"
           target_commitish: ${{ github.sha }}
           make_latest: true
           body: |
-            Port personal de Arnis 3.4.0 para Android (arm64, Android 7+). Solo mundos de Minecraft Java.
+            **Arnis no oficial**: port personal de Arnis 3.4.0 (de Louis Erbkamm) para Android, no es la versión oficial (arm64, Android 7+). Solo mundos de Minecraft Java.
 
             Instala `Arnis-Android.apk`, elige un área en el mapa y pulsa **Start Generation**.
             El mundo se guarda en **Descargas/Arnis** (carpeta y .zip).
