@@ -483,12 +483,15 @@ $(document).ready(function () {
 
     // Define available tile themes
     var tileThemes = {
+        // Noche: el mapa completo de OpenStreetMap (mar, playas, pasto, bosques,
+        // ciudades, calles) oscurecido con un filtro, sin perder sus colores.
+        // CARTO dark_all ahora pide clave de API.
         'carto-dark': {
-            url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+            url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
             options: {
-                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-                subdomains: 'abcd',
-                maxZoom: 20
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                className: 'map-night',
+                maxZoom: 19
             }
         },
         'osm': {

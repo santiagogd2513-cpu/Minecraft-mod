@@ -466,3 +466,10 @@ body,
 .bbox-handle-move {
   cursor: move;
 }
+
+/* Tema «Oscuro (noche)»: OpenStreetMap atenuado, conservando los colores
+   (mar azul, playas arena, pasto y bosques verdes, ciudades grises). */
+.leaflet-layer.map-night,
+.map-night {
+  filter: brightness(0.68) contrast(1.12) saturate(1.3);
+}
