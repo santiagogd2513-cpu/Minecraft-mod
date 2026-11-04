@@ -1405,7 +1405,16 @@ function initSettings() {
   const tileThemeSelect = document.getElementById("tile-theme-select");
 
   // Load saved tile theme preference
-  const savedTileTheme = localStorage.getItem('selectedTileTheme') || 'osm';
+  (function () {
+      // Mapa oscuro por defecto (una sola vez): el mapa claro deslumbra de noche
+      try {
+          if (localStorage.getItem('darkMapDefault_v1') !== '1') {
+              localStorage.setItem('selectedTileTheme', 'carto-dark');
+              localStorage.setItem('darkMapDefault_v1', '1');
+          }
+      } catch (e) { /* sin almacenamiento: se usa el valor por defecto */ }
+  })();
+  const savedTileTheme = localStorage.getItem('selectedTileTheme') || 'carto-dark';
   tileThemeSelect.value = savedTileTheme;
 
   // Handle tile theme change

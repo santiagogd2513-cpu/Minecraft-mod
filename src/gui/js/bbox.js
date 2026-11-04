@@ -483,6 +483,14 @@ $(document).ready(function () {
 
     // Define available tile themes
     var tileThemes = {
+        'carto-dark': {
+            url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+            options: {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                subdomains: 'abcd',
+                maxZoom: 20
+            }
+        },
         'osm': {
             url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
             options: {
@@ -586,6 +594,7 @@ $(document).ready(function () {
     **
     */
     var BASEMAP_FALLBACK_CHAIN = [
+        'carto-dark',
         'osm',
         'esri-imagery',
         'opentopomap',
@@ -881,8 +890,17 @@ $(document).ready(function () {
         showEarthTheme(selectedEarthTheme);
     }
 
-    // Load saved theme or default to OSM
-    var savedTheme = localStorage.getItem('selectedTileTheme') || 'osm';
+    // Load saved theme or default to the dark map
+    (function () {
+        // Mapa oscuro por defecto (una sola vez): el mapa claro deslumbra de noche
+        try {
+            if (localStorage.getItem('darkMapDefault_v1') !== '1') {
+                localStorage.setItem('selectedTileTheme', 'carto-dark');
+                localStorage.setItem('darkMapDefault_v1', '1');
+            }
+        } catch (e) { /* sin almacenamiento: se usa el valor por defecto */ }
+    })();
+    var savedTheme = localStorage.getItem('selectedTileTheme') || 'carto-dark';
     var selectedEarthTheme = savedTheme;
 
     var BODY_CYCLE = ['earth', 'moon', 'mars'];
