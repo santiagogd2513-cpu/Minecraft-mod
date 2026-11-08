@@ -1956,6 +1956,14 @@ fn gui_start_generation(
 
             // Ask Args, not the frontend mode: below OBJECT_SKIP_SCALE, or off Earth, no OSM
             // is loaded whatever mode was picked.
+            if let Ok(mut last) = ground::LAST_ELEVATION_ERROR.lock() {
+                *last = None;
+            }
+            // Se pidió terreno y el relieve no llegó: mejor parar y decirlo que entregar un
+            // mundo plano como si nada.
+            let flat_by_failure = |args: &Args, ground: &ground::Ground| {
+                args.terrain() && args.body.is_earth() && !ground.elevation_enabled
+            };
             if args.skip_osm() {
                 // Ground data (terrain) only
                 let mut ground = ground::generate_ground_data(
@@ -1963,6 +1971,12 @@ fn gui_start_generation(
                     bbox,
                     &crate::elevation::PeakSource::none(),
                 );
+                if flat_by_failure(&args, &ground) {
+                    let error_msg = ground::flat_terrain_error();
+                    eprintln!("{error_msg}");
+                    emit_gui_error(&error_msg);
+                    return Err(error_msg);
+                }
                 let mut args = args;
                 settle(&mut args, &ground)?;
                 let args = args;
@@ -2080,6 +2094,12 @@ fn gui_start_generation(
                 emit_gui_error(&error_msg);
                 return Err(error_msg);
             };
+            if fetch_result.is_ok() && flat_by_failure(&args, &ground) {
+                let error_msg = ground::flat_terrain_error();
+                eprintln!("{error_msg}");
+                emit_gui_error(&error_msg);
+                return Err(error_msg);
+            }
             // Nothing to settle when the fetch failed: the run ends below.
             let mut args = args;
             if fetch_result.is_ok() {

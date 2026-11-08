@@ -36,8 +36,22 @@ pub struct RotationMask {
     pub orig_max_z: i32,
 }
 
+/// Por qué falló la última descarga del relieve (None si no falló). La app la usa para
+/// detener la generación y explicar el motivo, en vez de entregar un mundo plano callado.
+pub static LAST_ELEVATION_ERROR: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+/// Mensaje para la persona cuando se pidió terreno y no llegó el relieve.
+pub fn flat_terrain_error() -> String {
+    let cause = LAST_ELEVATION_ERROR.lock().ok().and_then(|l| l.clone()).unwrap_or_default();
+    format!(
+        "No se pudo descargar el relieve (las alturas del terreno) y el mundo saldría plano. Revisa tu internet e inténtalo de nuevo, o apaga «Terreno» si lo quieres plano.{}",
+        if cause.is_empty() { String::new() } else { format!(" Motivo: {cause}") }
+    )
+}
+
 /// Represents terrain data, land cover classification, and elevation settings
 #[derive(Clone)]
+
 pub struct Ground {
     pub elevation_enabled: bool,
     /// The output format's pack raised the build ceiling, so relief stays close to metre scale.
@@ -601,6 +615,10 @@ impl Ground {
                 }
                 Err(e) => {
                     eprintln!("Failed to fetch elevation data: {}", e);
+                    // La app lo lee para no entregar un mundo plano sin avisar.
+                    if let Ok(mut last) = LAST_ELEVATION_ERROR.lock() {
+                        *last = Some(e.to_string().chars().take(160).collect());
+                    }
                     #[cfg(feature = "gui")]
                     {
                         let short: String = e.to_string().chars().take(200).collect();

@@ -43,6 +43,8 @@
   // information, the generator always builds it.
   const QUICK = [
     { key: "terrain", icon: "🏔️", label: "Terreno", kind: "mode" },
+    // Relieve: cada toque cambia la altura de cerros y montañas (×1 real, ×1,5, ×2, ×3).
+    { key: "height-multiplier-slider", icon: "⛰️", label: "Relieve", kind: "height" },
     { key: "roofs", icon: "🏠", label: "Techos", kind: "always" },
     { key: "interior-toggle", icon: "🛋️", label: "Interiores", kind: "check" },
     { key: "overture-toggle", icon: "🏢", label: "Más edificios", kind: "check" },
@@ -56,8 +58,32 @@
     return document.getElementById("generation-mode-select");
   }
 
+  const HEIGHTS = [1, 1.5, 2, 3];
+
+  function heightValue() {
+    const el = document.getElementById("height-multiplier-slider");
+    const v = el ? parseFloat(el.value) : 1;
+    return isFinite(v) ? v : 1;
+  }
+
+  function heightLabel() {
+    const v = heightValue();
+    return "Relieve ×" + (Math.round(v * 100) / 100).toString().replace(".", ",");
+  }
+
+  function cycleHeight() {
+    const el = document.getElementById("height-multiplier-slider");
+    if (!el || el.disabled) return;
+    const v = heightValue();
+    let i = HEIGHTS.findIndex(function (h) { return Math.abs(h - v) < 0.01; });
+    i = i < 0 ? 0 : (i + 1) % HEIGHTS.length;
+    el.value = String(HEIGHTS[i]);
+    fire(el);
+  }
+
   function isOn(item) {
     if (item.kind === "always") return true;
+    if (item.kind === "height") return heightValue() > 1.01;
     if (item.kind === "mode") {
       const s = modeSelect();
       return !s || s.value === "geo-terrain" || s.value === "terrain-only";
@@ -72,7 +98,7 @@
   }
 
   function setOn(item, on) {
-    if (item.kind === "always") return;
+    if (item.kind === "always" || item.kind === "height") return;
     if (item.kind === "mode") {
       const s = modeSelect();
       if (!s) return;
@@ -115,7 +141,8 @@
         chip.title = "Siempre incluidos";
       } else {
         chip.addEventListener("click", function () {
-          setOn(item, !isOn(item));
+          if (item.kind === "height") cycleHeight();
+          else setOn(item, !isOn(item));
           refreshChips();
         });
       }
@@ -131,7 +158,11 @@
       const on = isOn(item);
       chip.classList.toggle("on", on);
       chip.setAttribute("aria-pressed", on ? "true" : "false");
-      const el = item.kind === "check" ? document.getElementById(item.key) : null;
+      if (item.kind === "height") {
+        chip.querySelector(".quick-chip-label").textContent = heightLabel();
+        chip.title = "Toca para cambiar la altura de los cerros y montañas (×1 es la altura real)";
+      }
+      const el = item.kind === "check" || item.kind === "height" ? document.getElementById(item.key) : null;
       chip.classList.toggle("disabled", !!(el && el.disabled));
     });
   }
