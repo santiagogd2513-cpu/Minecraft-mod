@@ -57,6 +57,9 @@ jobs:
           npm run tauri -- icon assets/icons/icon.png
           bash android/patch-android-project.sh
 
+      - name: Número de versión para el aviso de actualizaciones
+        run: echo "window.ARNIS_ANDROID_BUILD = ${{ github.run_number }};" > src/gui/js/build-info.js
+
       - name: Compilar APK (arm64)
         run: npm run tauri -- android build --ci --apk --target aarch64
 

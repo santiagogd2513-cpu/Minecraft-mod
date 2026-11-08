@@ -486,7 +486,69 @@
     setupSheet(controls);
   }
 
+  // ---------- Aviso de versión nueva ----------
+
+  const RELEASES = "https://api.github.com/repos/santiagogd2513-cpu/Minecraft-mod/releases?per_page=40";
+
+  function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, String(v)); } catch (e) { return null; } }
+
+  function checkUpdate() {
+    const cur = window.ARNIS_ANDROID_BUILD || 0;
+    if (!cur) return;
+    const now = Date.now();
+    if (now < (+store("upd-later") || 0) || now - (+store("upd-last") || 0) < 3600e3) return;
+    fetch(RELEASES, { headers: { Accept: "application/vnd.github+json" } })
+      .then(function (r) { return r.json(); })
+      .then(function (list) {
+        store("upd-last", Date.now());
+        let best = null;
+        (list || []).forEach(function (r) {
+          const m = /^android-(\d+)$/.exec(r.tag_name || "");
+          if (!m || r.draft || r.prerelease) return;
+          const n = +m[1];
+          const a = (r.assets || []).find(function (x) { return x.name === "Arnis-Android.apk"; });
+          if (a && (!best || n > best.n)) best = { n: n, url: a.browser_download_url, size: a.size };
+        });
+        if (best && best.n > cur && String(best.n) !== store("upd-skip")) showUpdate(best, cur);
+      })
+      .catch(function () { /* sin internet: la próxima vez */ });
+  }
+
+  function showUpdate(rel, cur) {
+    const back = document.createElement("div");
+    back.style.cssText = "position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:18px";
+    const box = document.createElement("div");
+    box.style.cssText = "background:#141a26;color:#e6edf7;border:1px solid #2a3550;border-radius:18px;padding:20px;max-width:420px;width:100%;font:15px/1.45 system-ui,sans-serif;box-shadow:0 20px 60px rgba(0,0,0,.5)";
+    const mb = rel.size ? (rel.size / 1048576).toFixed(0) + " MB" : "";
+    box.innerHTML = '<div style="font-size:19px;font-weight:700;margin-bottom:8px">¡Hay una versión nueva!</div>'
+      + '<div style="color:#aab4c8">Arnis no oficial #' + rel.n + ' ya está disponible (tienes la #' + cur + ').<br><br>'
+      + 'Al tocar <b>Actualizar</b> se descarga con tu navegador' + (mb ? ' (' + mb + ')' : '') + '; cuando termine, ábrelo para instalarlo encima. No se borran tus mundos.<br><br>'
+      + '«Ahora no» no vuelve a avisar de esta versión; «Más tarde» te recuerda mañana.</div>'
+      + '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap"></div>';
+    const row = box.lastChild;
+    function btn(text, primary, fn) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = text;
+      b.style.cssText = "border:0;border-radius:12px;padding:10px 14px;font:600 14px system-ui,sans-serif;cursor:pointer;"
+        + (primary ? "background:linear-gradient(135deg,#6fd36f,#2fb5a3);color:#06140d" : "background:#222b3d;color:#e6edf7");
+      b.addEventListener("click", function () { back.remove(); fn(); });
+      row.appendChild(b);
+    }
+    btn("Ahora no", false, function () { store("upd-skip", rel.n); });
+    btn("Más tarde", false, function () { store("upd-later", Date.now() + 24 * 3600e3); });
+    btn("Actualizar", true, function () {
+      try {
+        if (window.__TAURI__ && window.__TAURI__.shell && window.__TAURI__.shell.open) window.__TAURI__.shell.open(rel.url);
+        else window.open(rel.url, "_blank");
+      } catch (e) { window.open(rel.url, "_blank"); }
+    });
+    back.appendChild(box);
+    document.body.appendChild(back);
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
+    setTimeout(checkUpdate, 2500);
     buildLayout();
 
     // main.js restores saved settings during its own start-up; apply the "all on"
