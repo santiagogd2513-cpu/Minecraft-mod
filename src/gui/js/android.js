@@ -490,65 +490,114 @@
 
   const RELEASES = "https://api.github.com/repos/santiagogd2513-cpu/Minecraft-mod/releases?per_page=40";
 
-  function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, String(v)); } catch (e) { return null; } }
+  let checking = false, showing = false, closedThisVisit = false;
 
+  function esc(t) {
+    return String(t).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; });
+  }
+
+  /** Las notas de la versión (markdown sencillo de GitHub) a HTML: títulos, viñetas y negritas. */
+  function notesHtml(text) {
+    const out = [];
+    let list = false;
+    String(text || "").replace(/\r/g, "").split("\n").forEach(function (raw) {
+      const line = raw.trim();
+      if (!line) return;
+      const item = /^[-*•]\s+(.*)$/.exec(line);
+      if (!item && list) { out.push("</ul>"); list = false; }
+      const fmt = function (t) { return esc(t).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/`(.+?)`/g, "<b>$1</b>"); };
+      if (item) {
+        if (!list) { out.push('<ul style="margin:6px 0 0 18px;padding:0">'); list = true; }
+        out.push('<li style="margin:4px 0">' + fmt(item[1]) + "</li>");
+      } else if (/^#+\s+/.test(line)) {
+        out.push('<div style="font-weight:700;margin-top:6px">' + fmt(line.replace(/^#+\s+/, "")) + "</div>");
+      } else {
+        out.push('<div style="color:#aab4c8;margin-top:4px">' + fmt(line) + "</div>");
+      }
+    });
+    if (list) out.push("</ul>");
+    return out.join("");
+  }
+
+  /** Busca versión nueva cada vez que se abre Arnis (o se vuelve a él); si la hay, sale el aviso. */
   function checkUpdate() {
     const cur = window.ARNIS_ANDROID_BUILD || 0;
-    if (!cur) return;
-    const now = Date.now();
-    if (now < (+store("upd-later") || 0) || now - (+store("upd-last") || 0) < 3600e3) return;
+    if (!cur || checking || showing || closedThisVisit) return;
+    checking = true;
     fetch(RELEASES, { headers: { Accept: "application/vnd.github+json" } })
       .then(function (r) { return r.json(); })
       .then(function (list) {
-        store("upd-last", Date.now());
         let best = null;
+        const notes = [];
         (list || []).forEach(function (r) {
           const m = /^android-(\d+)$/.exec(r.tag_name || "");
           if (!m || r.draft || r.prerelease) return;
           const n = +m[1];
+          if (n > cur) notes.push({ n: n, body: r.body || "" });
           const a = (r.assets || []).find(function (x) { return x.name === "Arnis-Android.apk"; });
           if (a && (!best || n > best.n)) best = { n: n, url: a.browser_download_url, size: a.size };
         });
-        if (best && best.n > cur && String(best.n) !== store("upd-skip")) showUpdate(best, cur);
+        notes.sort(function (a, b) { return b.n - a.n; });
+        if (best && best.n > cur) showUpdate(best, cur, notes);
       })
-      .catch(function () { /* sin internet: la próxima vez */ });
+      .catch(function () { /* sin internet: la próxima vez que se abra */ })
+      .finally(function () { checking = false; });
   }
 
-  function showUpdate(rel, cur) {
+  function showUpdate(rel, cur, notes) {
+    if (showing || closedThisVisit) return;
+    showing = true;
     const back = document.createElement("div");
-    back.style.cssText = "position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:18px";
-    const box = document.createElement("div");
-    box.style.cssText = "background:#141a26;color:#e6edf7;border:1px solid #2a3550;border-radius:18px;padding:20px;max-width:420px;width:100%;font:15px/1.45 system-ui,sans-serif;box-shadow:0 20px 60px rgba(0,0,0,.5)";
+    back.style.cssText = "position:fixed;inset:0;z-index:99999;background:#0b0f17;color:#e6edf7;display:flex;flex-direction:column;"
+      + "padding:calc(env(safe-area-inset-top) + 22px) 20px calc(env(safe-area-inset-bottom) + 16px);font:15px/1.5 system-ui,sans-serif";
     const mb = rel.size ? (rel.size / 1048576).toFixed(0) + " MB" : "";
-    box.innerHTML = '<div style="font-size:19px;font-weight:700;margin-bottom:8px">¡Hay una versión nueva!</div>'
-      + '<div style="color:#aab4c8">Arnis no oficial #' + rel.n + ' ya está disponible (tienes la #' + cur + ').<br><br>'
-      + 'Al tocar <b>Actualizar</b> se descarga con tu navegador' + (mb ? ' (' + mb + ')' : '') + '; cuando termine, ábrelo para instalarlo encima. No se borran tus mundos.<br><br>'
-      + '«Ahora no» no vuelve a avisar de esta versión; «Más tarde» te recuerda mañana.</div>'
-      + '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap"></div>';
-    const row = box.lastChild;
+    const cards = notes.slice(0, 8).map(function (x) {
+      return '<div style="background:#141c2b;border:1px solid #233049;border-radius:16px;padding:14px 16px;margin-bottom:10px">'
+        + '<div style="font-weight:800;font-size:16px;margin-bottom:4px">#' + x.n + "</div>"
+        + (notesHtml(x.body) || '<div style="color:#aab4c8">Mejoras y arreglos para que todo funcione mejor.</div>') + "</div>";
+    }).join("");
+    back.innerHTML =
+      '<div><span style="display:inline-block;padding:6px 14px;border-radius:999px;font-weight:800;letter-spacing:.14em;font-size:13px;'
+      + 'background:linear-gradient(135deg,#6fd36f,#2fb5a3);color:#06140d">NUEVA VERSIÓN</span></div>'
+      + '<div style="font-size:30px;font-weight:800;margin:14px 0 2px">Arnis no oficial se actualizó</div>'
+      + '<div style="color:#8b97ab;font-size:17px">Versión #' + rel.n + " · tienes la #" + cur + (mb ? " · " + mb : "") + "</div>"
+      + '<div style="color:#6fd3b8;font-weight:800;letter-spacing:.06em;font-size:18px;margin:22px 0 10px">Novedades</div>'
+      + '<div style="flex:1;overflow:auto;-webkit-overflow-scrolling:touch">' + cards + "</div>"
+      + '<div style="color:#7d889c;font-size:12.5px;margin:10px 2px">Se descarga con tu navegador; al terminar, ábrelo para instalarlo encima. No se borran tus mundos.</div>';
     function btn(text, primary, fn) {
       const b = document.createElement("button");
       b.type = "button";
       b.textContent = text;
-      b.style.cssText = "border:0;border-radius:12px;padding:10px 14px;font:600 14px system-ui,sans-serif;cursor:pointer;"
-        + (primary ? "background:linear-gradient(135deg,#6fd36f,#2fb5a3);color:#06140d" : "background:#222b3d;color:#e6edf7");
-      b.addEventListener("click", function () { back.remove(); fn(); });
-      row.appendChild(b);
+      b.style.cssText = "width:100%;border:0;border-radius:999px;padding:16px;margin-top:8px;font:800 18px system-ui,sans-serif;cursor:pointer;"
+        + (primary ? "background:linear-gradient(135deg,#6fd36f,#2fb5a3);color:#06140d" : "background:transparent;color:#e6edf7");
+      b.addEventListener("click", function () {
+        back.remove();
+        showing = false;
+        closedThisVisit = true;
+        fn();
+      });
+      back.appendChild(b);
     }
-    btn("Ahora no", false, function () { store("upd-skip", rel.n); });
-    btn("Más tarde", false, function () { store("upd-later", Date.now() + 24 * 3600e3); });
-    btn("Actualizar", true, function () {
+    btn("Actualizar ahora", true, function () {
       try {
         if (window.__TAURI__ && window.__TAURI__.shell && window.__TAURI__.shell.open) window.__TAURI__.shell.open(rel.url);
         else window.open(rel.url, "_blank");
       } catch (e) { window.open(rel.url, "_blank"); }
     });
-    back.appendChild(box);
+    btn("Más tarde", false, function () { });
     document.body.appendChild(back);
   }
 
+  // al volver a Arnis desde otra app (o desde el escritorio) se vuelve a buscar
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) closedThisVisit = false;
+    else setTimeout(checkUpdate, 800);
+  });
+
   document.addEventListener("DOMContentLoaded", function () {
-    setTimeout(checkUpdate, 2500);
+    // limpia lo que guardaba el aviso viejo («Ahora no» y «Más tarde» por un día)
+    try { ["upd-later", "upd-last", "upd-skip"].forEach(function (k) { localStorage.removeItem(k); }); } catch (e) { }
+    setTimeout(checkUpdate, 1500);
     buildLayout();
 
     // main.js restores saved settings during its own start-up; apply the "all on"

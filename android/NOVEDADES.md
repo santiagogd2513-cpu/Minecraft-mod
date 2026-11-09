@@ -1,0 +1,2 @@
+- **Aviso de actualización nuevo:** ahora Arnis busca una versión nueva cada vez que lo abres y, si la hay, te muestra este cartel a pantalla completa con las novedades, igual que las demás apps de Forja Estudios.
+- **«Más tarde»** solo cierra el aviso hasta la próxima vez que entres; ya no se queda callado por un día ni para siempre.
