@@ -15,9 +15,9 @@
     { emoji: "🎃", name: "Halloween", dates: "Todo octubre", c: ["#FF7A00", "#7B2CBF"] },
   ];
   // Qué temporadas ya tienen decoraciones y su ícono dibujado.
-  var THEME_READY = [true, true, false, false, false];
-  var ICON_READY = [true, true, false, false, false];
-  var ALIAS = ["InicioNavidad", "InicioVelitas"];
+  var THEME_READY = [true, true, true, true, false];
+  var ICON_READY = [true, true, true, true, false];
+  var ALIAS = ["InicioNavidad", "InicioVelitas", "InicioValentin", "InicioAmistad"];
 
   function get(k, d) {
     try { var v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; }
@@ -90,7 +90,7 @@
     if (!S.iconsOn()) return "Inicio";
     var i = S.icon();
     if (i === "auto") { var t = S.themesOn() ? current() : today(); i = t < 0 ? "original" : t; }
-    return i === "original" || !ICON_READY[i] || i > 1 ? "Inicio" : ALIAS[i];
+    return i === "original" || !ICON_READY[i] || !ALIAS[i] ? "Inicio" : ALIAS[i];
   }
 
   // Le pide a la app el ícono (se cambia al salir). La primera vez avisa que el acceso directo

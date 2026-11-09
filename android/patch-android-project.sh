@@ -117,7 +117,7 @@ class MainActivity : TauriActivity() {
   }
 
   companion object {
-    private val ICONS = listOf("Inicio", "InicioNavidad", "InicioVelitas")
+    private val ICONS = listOf("Inicio", "InicioNavidad", "InicioVelitas", "InicioValentin", "InicioAmistad")
   }
 }
 KOTLIN
@@ -132,7 +132,7 @@ cp -r android/icons/mipmap-* "$RES/"
 BG='@color/ic_launcher_background'
 grep -rqs 'name="ic_launcher_background"' "$RES/values" || BG='@android:color/white'
 mkdir -p "$RES/mipmap-anydpi-v26"
-for s in navidad velitas; do
+for s in navidad velitas valentin amistad; do
   cat > "$RES/mipmap-anydpi-v26/ic_launcher_$s.xml" <<XML
 <?xml version="1.0" encoding="utf-8"?>
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">

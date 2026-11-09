@@ -1,5 +1,4 @@
-- **🎄 Navidad (1 de diciembre al 6 de enero):** nieve que cae sobre el mapa y una tira de lucecitas de colores con borde de nieve arriba del panel de abajo.
-- **🕯️ Día de las Velitas (7 de diciembre):** chispitas que suben con un resplandor cálido y una guirnalda de faroles de colores que se mecen.
-- **Íconos de temporada:** en Navidad el pin se vuelve un arbolito y el mundo se cubre de nieve; el 7 de diciembre el mundo lleva velitas encendidas. En «Automático» cambian solos con la fecha y el ícono cambia cuando sales de la app.
-- ¿Quieres verlos ya? Ajustes → Temas de temporada → toca el nombre y elige Navidad o Velitas.
-- Ojo: con esta actualización, Android puede quitar el acceso directo de tu pantalla de inicio una vez. La app no se borra: búscala en el cajón de apps y vuelve a ponerla.
+- **💘 San Valentín (1 al 14 de febrero):** corazones que suben flotando sobre el mapa y una guirnalda de corazones que laten arriba del panel de abajo.
+- **🤝 Amor y Amistad (todo septiembre):** confeti, corazones y estrellitas de colores que caen girando, y banderines de fiesta que ondean.
+- **Íconos nuevos:** en San Valentín el pin se vuelve un corazón con la flecha de Cupido, y en Amor y Amistad el mundo trae un regalito de amigo secreto con confeti.
+- ¿Quieres verlos ya? Ajustes → Temas de temporada → toca el nombre y elige San Valentín o Amor y Amistad.
