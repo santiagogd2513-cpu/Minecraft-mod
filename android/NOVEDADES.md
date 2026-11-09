@@ -1,2 +1,4 @@
-- **Aviso de actualización nuevo:** ahora Arnis busca una versión nueva cada vez que lo abres y, si la hay, te muestra este cartel a pantalla completa con las novedades, igual que las demás apps de Forja Estudios.
-- **«Más tarde»** solo cierra el aviso hasta la próxima vez que entres; ya no se queda callado por un día ni para siempre.
+- **🎄 Temas de temporada (etapa 1):** nueva sección en Ajustes. Navidad (1 de diciembre al 6 de enero), Día de las Velitas (7 de diciembre), San Valentín (1 al 14 de febrero), Amor y Amistad (todo septiembre) y Halloween (todo octubre).
+- **Dos interruptores**, encendidos de fábrica: «Temas de temporada» e «Íconos de temporada». Toca el nombre para abrir su menú: «Automático» sigue la fecha, o deja fijo el tema que quieras todo el año.
+- Arriba se ve qué temporada está activa o cuántos días faltan para la próxima.
+- Las decoraciones (nieve, luces, íconos y más) llegan en las próximas actualizaciones; lo que elijas ya queda guardado.

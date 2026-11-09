@@ -5,6 +5,7 @@
   <meta charset="UTF-8" />
   <link rel="stylesheet" href="./css/styles.css" />
   <link rel="stylesheet" href="./css/settings.css" />
+  <link rel="stylesheet" href="./css/season.css" />
   <link rel="stylesheet" href="./css/dialogs.css" />
   <link rel="stylesheet" href="./css/preview3d.css" />
   <link rel="stylesheet" href="./css/mobile.css" />
@@ -16,6 +17,7 @@
   <!-- Android build: prepares localStorage before main.js runs (Java only, no telemetry). -->
   <script src="./js/build-info.js"></script>
   <script src="./js/android.js"></script>
+  <script src="./js/season.js" defer></script>
   <script src="./js/preview3d.js" defer></script>
   <script type="module" src="./js/main.js" defer></script>
   <script type="module" src="./js/license.js" defer></script>
@@ -28,6 +30,7 @@
        <svg class="icon"><use href="#i-..."></use></svg>; stroke and colour
        come from the .icon rule. -->
   <svg class="icon-sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+    <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M10 3l1.6 5.4L17 10l-5.4 1.6L10 17l-1.6-5.4L3 10l5.4-1.6z"/><path d="M18 14l.8 2.2L21 17l-2.2.8L18 20l-.8-2.2L15 17l2.2-.8z"/></symbol>
     <symbol id="i-settings" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
     <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
     <symbol id="i-reset" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></symbol>
@@ -254,6 +257,13 @@
               <span class="settings-nav-sub" data-localize="settings_nav_advanced">Build height, lighting, mods</span>
             </span>
             <span class="settings-nav-dot" aria-hidden="true"></span>
+          </button>
+          <button type="button" class="settings-nav-item" data-target="settings-section-season">
+            <svg class="icon" aria-hidden="true"><use href="#i-sparkles"></use></svg>
+            <span class="settings-nav-text">
+              <span class="settings-nav-title">Temas de temporada</span>
+              <span class="settings-nav-sub">Navidad, Velitas, Halloween y más</span>
+            </span>
           </button>
           <button type="button" class="settings-nav-item" data-target="settings-section-about">
             <svg class="icon" aria-hidden="true"><use href="#i-info"></use></svg>
@@ -1292,6 +1302,46 @@
             </section>
 
             <!-- About -->
+            <!-- Temas e íconos de temporada (js/season.js) -->
+            <section class="settings-section" id="settings-section-season">
+              <header class="settings-section-head">
+                <span class="settings-section-icon" aria-hidden="true"><svg class="icon"><use href="#i-sparkles"></use></svg></span>
+                <div>
+                  <h3>Temas de temporada</h3>
+                  <p>Navidad, Día de las Velitas, San Valentín, Amor y Amistad y Halloween.</p>
+                </div>
+              </header>
+              <div id="season-banner" class="season-banner"></div>
+              <div class="setting-grid">
+                <div class="settings-row setting-tile is-wide season-row" id="season-theme-row">
+                  <div class="setting-label season-open" data-menu="theme">
+                    <svg class="icon setting-icon" aria-hidden="true"><use href="#i-sparkles"></use></svg>
+                    <span class="setting-text">
+                      <span class="setting-heading">Temas de temporada <span class="season-chev">›</span></span>
+                      <span class="setting-desc" id="season-theme-desc"></span>
+                    </span>
+                  </div>
+                  <div class="settings-control">
+                    <input type="checkbox" class="switch" id="season-theme-toggle" aria-label="Temas de temporada">
+                  </div>
+                </div>
+                <div class="settings-row setting-tile is-wide season-row" id="season-icon-row">
+                  <div class="setting-label season-open" data-menu="icon">
+                    <svg class="icon setting-icon" aria-hidden="true"><use href="#i-sparkles"></use></svg>
+                    <span class="setting-text">
+                      <span class="setting-heading">Íconos de temporada <span class="season-chev">›</span></span>
+                      <span class="setting-desc" id="season-icon-desc"></span>
+                    </span>
+                  </div>
+                  <div class="settings-control">
+                    <input type="checkbox" class="switch" id="season-icon-toggle" aria-label="Íconos de temporada">
+                  </div>
+                </div>
+              </div>
+              <p class="season-tip">Toca el nombre para elegir; el interruptor enciende o apaga.</p>
+              <p class="season-soon">🎨 Las decoraciones de cada temporada (nieve, luces, íconos y más) llegan en las próximas actualizaciones. Lo que elijas aquí ya queda guardado.</p>
+            </section>
+
             <section class="settings-section" id="settings-section-about">
               <header class="settings-section-head">
                 <span class="settings-section-icon" aria-hidden="true"><svg class="icon"><use href="#i-info"></use></svg></span>
