@@ -1,4 +1,5 @@
-- **🎄 Temas de temporada (etapa 1):** nueva sección en Ajustes. Navidad (1 de diciembre al 6 de enero), Día de las Velitas (7 de diciembre), San Valentín (1 al 14 de febrero), Amor y Amistad (todo septiembre) y Halloween (todo octubre).
-- **Dos interruptores**, encendidos de fábrica: «Temas de temporada» e «Íconos de temporada». Toca el nombre para abrir su menú: «Automático» sigue la fecha, o deja fijo el tema que quieras todo el año.
-- Arriba se ve qué temporada está activa o cuántos días faltan para la próxima.
-- Las decoraciones (nieve, luces, íconos y más) llegan en las próximas actualizaciones; lo que elijas ya queda guardado.
+- **🎄 Navidad (1 de diciembre al 6 de enero):** nieve que cae sobre el mapa y una tira de lucecitas de colores con borde de nieve arriba del panel de abajo.
+- **🕯️ Día de las Velitas (7 de diciembre):** chispitas que suben con un resplandor cálido y una guirnalda de faroles de colores que se mecen.
+- **Íconos de temporada:** en Navidad el pin se vuelve un arbolito y el mundo se cubre de nieve; el 7 de diciembre el mundo lleva velitas encendidas. En «Automático» cambian solos con la fecha y el ícono cambia cuando sales de la app.
+- ¿Quieres verlos ya? Ajustes → Temas de temporada → toca el nombre y elige Navidad o Velitas.
+- Ojo: con esta actualización, Android puede quitar el acceso directo de tu pantalla de inicio una vez. La app no se borra: búscala en el cajón de apps y vuelve a ponerla.

@@ -48,8 +48,11 @@ if [ -n "$ACTIVITY" ]; then
   cat > "$ACTIVITY" <<KOTLIN
 package $PKG
 
+import android.content.ComponentName
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.View
+import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -73,12 +76,72 @@ class MainActivity : TauriActivity() {
     super.onWebViewCreate(webView)
     // Keep text at 100% so a large system font does not break the layout.
     webView.settings.textZoom = 100
+    // Íconos de temporada: la página dice cuál quiere y se cambia al salir de la app
+    // (cambiarlo con la app abierta puede cerrarla en algunos celulares).
+    webView.addJavascriptInterface(object {
+      @JavascriptInterface
+      fun setIcon(name: String) {
+        if (name in ICONS) pendingIcon = name
+      }
+
+      @JavascriptInterface
+      fun current(): String = currentIcon()
+    }, "ArnisIcons")
+  }
+
+  private var pendingIcon: String? = null
+
+  private fun alias(name: String) = ComponentName(packageName, "$PKG.\$name")
+
+  private fun currentIcon(): String {
+    for (a in ICONS) {
+      val s = packageManager.getComponentEnabledSetting(alias(a))
+      if (s == PackageManager.COMPONENT_ENABLED_STATE_ENABLED ||
+        (s == PackageManager.COMPONENT_ENABLED_STATE_DEFAULT && a == "Inicio")) return a
+    }
+    return "Inicio"
+  }
+
+  override fun onStop() {
+    super.onStop()
+    val want = pendingIcon ?: return
+    pendingIcon = null
+    if (want == currentIcon()) return
+    try {
+      packageManager.setComponentEnabledSetting(alias(want),
+        PackageManager.COMPONENT_ENABLED_STATE_ENABLED, PackageManager.DONT_KILL_APP)
+      for (a in ICONS) if (a != want) packageManager.setComponentEnabledSetting(alias(a),
+        PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP)
+    } catch (e: Exception) {
+    }
+  }
+
+  companion object {
+    private val ICONS = listOf("Inicio", "InicioNavidad", "InicioVelitas")
   }
 }
 KOTLIN
   echo "--- MainActivity.kt ---"
   cat "$ACTIVITY"
 fi
+
+# Íconos de temporada: el ícono del inicio pasa a unos activity-alias (uno por temporada, solo
+# uno prendido); MainActivity.kt los cambia cuando la página se lo pide (js/season.js).
+RES=gen/android/app/src/main/res
+cp -r android/icons/mipmap-* "$RES/"
+BG='@color/ic_launcher_background'
+grep -rqs 'name="ic_launcher_background"' "$RES/values" || BG='@android:color/white'
+mkdir -p "$RES/mipmap-anydpi-v26"
+for s in navidad velitas; do
+  cat > "$RES/mipmap-anydpi-v26/ic_launcher_$s.xml" <<XML
+<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="$BG" />
+    <foreground android:drawable="@mipmap/ic_launcher_${s}_foreground" />
+</adaptive-icon>
+XML
+done
+python3 android/season-aliases.py "$MANIFEST"
 
 echo "--- AndroidManifest.xml ---"
 cat "$MANIFEST"

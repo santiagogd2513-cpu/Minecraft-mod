@@ -14,8 +14,10 @@
     { emoji: "🤝", name: "Amor y Amistad", dates: "Todo septiembre", c: ["#FFC857", "#FF6B8A"] },
     { emoji: "🎃", name: "Halloween", dates: "Todo octubre", c: ["#FF7A00", "#7B2CBF"] },
   ];
-  // Qué temporadas ya tienen su ícono dibujado (los temas llegan en las próximas versiones).
-  var ICON_READY = [false, false, false, false, false];
+  // Qué temporadas ya tienen decoraciones y su ícono dibujado.
+  var THEME_READY = [true, true, false, false, false];
+  var ICON_READY = [true, true, false, false, false];
+  var ALIAS = ["InicioNavidad", "InicioVelitas"];
 
   function get(k, d) {
     try { var v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; }
@@ -57,11 +59,62 @@
   }
 
   // La temporada activa queda en <html data-season="…"> para que el CSS la use.
+  var NAMES = ["navidad", "velitas", "valentin", "amistad", "halloween"];
+  var shown = null;
+
+  // Pone la nieve o las chispitas y la decoración arriba del panel de abajo (js/season-fx.js).
+  // Si cambia el tema, la página se recarga para quitar lo anterior.
   function applyTheme() {
     var c = current();
-    var names = ["navidad", "velitas", "valentin", "amistad", "halloween"];
-    if (c >= 0) document.documentElement.setAttribute("data-season", names[c]);
+    var name = c >= 0 && THEME_READY[c] ? NAMES[c] : null;
+    if (c >= 0) document.documentElement.setAttribute("data-season", NAMES[c]);
     else document.documentElement.removeAttribute("data-season");
+    if (shown === null) {
+      shown = name || "";
+      if (!name || !window.SeasonFx) return;
+      SeasonFx.sky(name);
+      var deco = function () {
+        var sheet = document.querySelector(".arnis-android .controls-box");
+        if (sheet) SeasonFx.card(sheet, name, 22, true);
+      };
+      if (document.getElementById("android-panel")) deco(); else setTimeout(deco, 800);
+    } else if (shown !== (name || "")) {
+      location.reload();
+    }
+  }
+
+  // ---------------------------------------------------------------- ícono
+
+  // El ícono que toca ahora: un alias de MainActivity ("Inicio" es el original).
+  function wantedIcon() {
+    if (!S.iconsOn()) return "Inicio";
+    var i = S.icon();
+    if (i === "auto") { var t = S.themesOn() ? current() : today(); i = t < 0 ? "original" : t; }
+    return i === "original" || !ICON_READY[i] || i > 1 ? "Inicio" : ALIAS[i];
+  }
+
+  // Le pide a la app el ícono (se cambia al salir). La primera vez avisa que el acceso directo
+  // de la pantalla de inicio puede desaparecer.
+  function syncIcon() {
+    if (!window.ArnisIcons) return;
+    var want = wantedIcon();
+    var now;
+    try { now = ArnisIcons.current(); } catch (e) { return; }
+    if (want === now) { ArnisIcons.setIcon(now); return; }
+    if (get("temporada-aviso-icono", "0") === "1") { ArnisIcons.setIcon(want); return; }
+    var sh = sheet("Antes de cambiar el ícono", null);
+    var p = el("p", "season-warn", "Al cambiar el ícono, Android puede quitar el acceso directo de la app de tu pantalla de inicio. "
+      + "La app no se borra: la encuentras en el cajón de apps y la vuelves a poner donde quieras. Este aviso solo sale esta vez.");
+    sh.list.appendChild(p);
+    var ok = el("button", "season-ok", "Entendido");
+    ok.type = "button";
+    ok.addEventListener("click", function () {
+      set("temporada-aviso-icono", "1");
+      ArnisIcons.setIcon(want);
+      sh.close();
+    });
+    sh.list.appendChild(ok);
+    sh.locked = true;
   }
 
   function el(tag, cls, text) {
@@ -134,10 +187,11 @@
       back.classList.remove("open");
       setTimeout(function () { back.remove(); }, 200);
     }
-    back.addEventListener("click", function (e) { if (e.target === back) close(); });
+    var api = { list: list, close: close, locked: false };
+    back.addEventListener("click", function (e) { if (e.target === back && !api.locked) close(); });
     document.body.appendChild(back);
     requestAnimationFrame(function () { back.classList.add("open"); });
-    return { list: list, close: close };
+    return api;
   }
 
   function option(list, badge, c1, c2, title, sub, selected, tag, pick) {
@@ -170,12 +224,14 @@
         set("temporada-temas", "1");
         sh.close();
         render();
+        syncIcon();
       };
     }
     option(sh.list, "📅", "#7b6cff", "#3fb8ff", "Automático (según la fecha)",
       now < 0 ? "Ahora no hay temporada" : "Ahora: " + SEASONS[now].emoji + " " + SEASONS[now].name, sel === "auto", null, pick("auto"));
     SEASONS.forEach(function (s, i) {
-      option(sh.list, s.emoji, s.c[0], s.c[1], s.name, s.dates + " · o todo el año", sel === i, null, pick(i));
+      option(sh.list, s.emoji, s.c[0], s.c[1], s.name, s.dates + " · o todo el año", sel === i,
+        THEME_READY[i] ? null : "Próximamente", pick(i));
     });
   }
 
@@ -188,6 +244,7 @@
         if (i !== "original") set("temporada-iconos", "1");
         sh.close();
         render();
+        syncIcon();
       };
     }
     option(sh.list, "✨", "#7b6cff", "#3fb8ff", "Automático", "Combina con la temporada", sel === "auto", null, pick("auto"));
@@ -199,14 +256,17 @@
 
   function init() {
     applyTheme();
+    setTimeout(syncIcon, 1500);
     if (!document.getElementById("season-banner")) return;
     document.getElementById("season-theme-toggle").addEventListener("change", function (e) {
       set("temporada-temas", e.target.checked ? "1" : "0");
       render();
+      syncIcon();
     });
     document.getElementById("season-icon-toggle").addEventListener("change", function (e) {
       set("temporada-iconos", e.target.checked ? "1" : "0");
       render();
+      syncIcon();
     });
     document.querySelectorAll(".season-open").forEach(function (o) {
       o.addEventListener("click", function () {

@@ -57,3 +57,8 @@
   background: rgba(255, 181, 71, .13);
 }
 .season-opt-check { font-size: 20px; font-weight: 700; }
+.season-warn { font-size: 14.5px; line-height: 1.45; color: #c9d4e6; margin: 4px 4px 16px; }
+.season-ok {
+  width: 100%; padding: 14px; border: 0; border-radius: 16px; font: inherit; font-weight: 700; font-size: 15px;
+  background: linear-gradient(90deg, #3d8bff, #36d1ff); color: #06101f;
+}
