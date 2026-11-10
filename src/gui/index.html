@@ -142,6 +142,11 @@
                 <button type="button" class="settings-button" onclick="openSettings()" aria-label="Settings">
                     <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                 </button>
+                <!-- Más ajustes: todo lo que no es de la generación (temas, idioma, interfaz, acerca de) -->
+                <button type="button" class="settings-button more-settings-button" onclick="openMoreSettings()" aria-label="More settings" title="Más ajustes">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                    <span class="more-plus" aria-hidden="true">+</span>
+                </button>
               </div>
               <div class="button-block-row">
                 <button type="button" id="format-java" class="format-toggle-btn format-active" onclick="setWorldFormat('java')">
@@ -188,14 +193,14 @@
          the scroll position (settings-layout.js). Every control keeps its id and
          sits in a .settings-row inside .settings-scrollable, which is all that
          main.js and settings-store.js rely on. -->
-    <div id="settings-modal" class="settings-page" style="display: none;" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <div id="settings-modal" data-mode="gen" class="settings-page" style="display: none;" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="settings-title">
       <aside class="settings-sidebar">
         <div class="settings-brand">
           <img src="./images/logo.png" alt="Arnis">
         </div>
 
         <nav class="settings-nav" aria-label="Settings sections">
-          <button type="button" class="settings-nav-item" data-target="settings-section-world">
+          <button type="button" class="settings-nav-item" data-group="gen" data-target="settings-section-world">
             <svg class="icon" aria-hidden="true"><use href="#i-globe"></use></svg>
             <span class="settings-nav-text">
               <span class="settings-nav-title" data-localize="settings_section_world">World</span>
@@ -203,7 +208,7 @@
             </span>
             <span class="settings-nav-dot" aria-hidden="true"></span>
           </button>
-          <button type="button" class="settings-nav-item" data-target="settings-section-generation">
+          <button type="button" class="settings-nav-item" data-group="gen" data-target="settings-section-generation">
             <svg class="icon" aria-hidden="true"><use href="#i-box"></use></svg>
             <span class="settings-nav-text">
               <span class="settings-nav-title" data-localize="settings_section_generation">Generation</span>
@@ -211,7 +216,7 @@
             </span>
             <span class="settings-nav-dot" aria-hidden="true"></span>
           </button>
-          <button type="button" class="settings-nav-item" data-target="settings-section-nature">
+          <button type="button" class="settings-nav-item" data-group="gen" data-target="settings-section-nature">
             <svg class="icon" aria-hidden="true"><use href="#i-trees"></use></svg>
             <span class="settings-nav-text">
               <span class="settings-nav-title" data-localize="settings_section_nature">Terrain &amp; Nature</span>
@@ -219,7 +224,7 @@
             </span>
             <span class="settings-nav-dot" aria-hidden="true"></span>
           </button>
-          <button type="button" class="settings-nav-item" data-target="settings-section-facades">
+          <button type="button" class="settings-nav-item" data-group="gen" data-target="settings-section-facades">
             <svg class="icon" aria-hidden="true"><use href="#i-brick-wall"></use></svg>
             <span class="settings-nav-text">
               <span class="settings-nav-title" data-localize="settings_section_facades">Building Facades</span>
@@ -227,7 +232,7 @@
             </span>
             <span class="settings-nav-dot" aria-hidden="true"></span>
           </button>
-          <button type="button" class="settings-nav-item" data-target="settings-section-gameplay">
+          <button type="button" class="settings-nav-item" data-group="gen" data-target="settings-section-gameplay">
             <svg class="icon" aria-hidden="true"><use href="#i-gamepad"></use></svg>
             <span class="settings-nav-text">
               <span class="settings-nav-title" data-localize="settings_section_gameplay">Gameplay</span>
@@ -235,7 +240,7 @@
             </span>
             <span class="settings-nav-dot" aria-hidden="true"></span>
           </button>
-          <button type="button" class="settings-nav-item" data-target="settings-section-map">
+          <button type="button" class="settings-nav-item" data-group="gen" data-target="settings-section-map">
             <svg class="icon" aria-hidden="true"><use href="#i-map"></use></svg>
             <span class="settings-nav-text">
               <span class="settings-nav-title" data-localize="settings_section_map">Map &amp; Input</span>
@@ -243,15 +248,15 @@
             </span>
             <span class="settings-nav-dot" aria-hidden="true"></span>
           </button>
-          <button type="button" class="settings-nav-item" data-target="settings-section-application">
-            <svg class="icon" aria-hidden="true"><use href="#i-monitor"></use></svg>
+          <button type="button" class="settings-nav-item" data-group="gen" data-target="settings-section-folders">
+            <svg class="icon" aria-hidden="true"><use href="#i-folder"></use></svg>
             <span class="settings-nav-text">
-              <span class="settings-nav-title" data-localize="settings_section_application">Application</span>
-              <span class="settings-nav-sub" data-localize="settings_nav_application">Language, folders, cache</span>
+              <span class="settings-nav-title" data-localize="settings_section_folders">Save Folders</span>
+              <span class="settings-nav-sub" data-localize="settings_nav_folders">Java, Bedrock, Luanti</span>
             </span>
             <span class="settings-nav-dot" aria-hidden="true"></span>
           </button>
-          <button type="button" class="settings-nav-item" data-target="settings-section-advanced">
+          <button type="button" class="settings-nav-item" data-group="gen" data-target="settings-section-advanced">
             <svg class="icon" aria-hidden="true"><use href="#i-sliders"></use></svg>
             <span class="settings-nav-text">
               <span class="settings-nav-title" data-localize="settings_section_advanced">Advanced</span>
@@ -259,14 +264,22 @@
             </span>
             <span class="settings-nav-dot" aria-hidden="true"></span>
           </button>
-          <button type="button" class="settings-nav-item" data-target="settings-section-season">
+          <button type="button" class="settings-nav-item" data-group="more" data-target="settings-section-application">
+            <svg class="icon" aria-hidden="true"><use href="#i-monitor"></use></svg>
+            <span class="settings-nav-text">
+              <span class="settings-nav-title" data-localize="settings_section_application">Application</span>
+              <span class="settings-nav-sub" data-localize="settings_nav_interface">Language, interface, cache</span>
+            </span>
+            <span class="settings-nav-dot" aria-hidden="true"></span>
+          </button>
+          <button type="button" class="settings-nav-item" data-group="more" data-target="settings-section-season">
             <svg class="icon" aria-hidden="true"><use href="#i-sparkles"></use></svg>
             <span class="settings-nav-text">
               <span class="settings-nav-title">Temas de temporada</span>
               <span class="settings-nav-sub">Navidad, Velitas, Halloween y más</span>
             </span>
           </button>
-          <button type="button" class="settings-nav-item" data-target="settings-section-about">
+          <button type="button" class="settings-nav-item" data-group="more" data-target="settings-section-about">
             <svg class="icon" aria-hidden="true"><use href="#i-info"></use></svg>
             <span class="settings-nav-text">
               <span class="settings-nav-title" data-localize="settings_section_about">About</span>
@@ -288,8 +301,10 @@
         <header class="settings-topbar">
           <span class="settings-topbar-icon" aria-hidden="true"><svg class="icon"><use href="#i-settings"></use></svg></span>
           <div class="settings-topbar-text">
-            <h2 id="settings-title" data-localize="customization_settings">Settings</h2>
-            <p data-localize="settings_subtitle">Configure how your Minecraft world should look and behave.</p>
+            <h2 id="settings-title" data-group="gen" data-localize="customization_settings">Settings</h2>
+            <p data-group="gen" data-localize="settings_subtitle">Configure how your Minecraft world should look and behave.</p>
+            <h2 data-group="more" data-localize="more_settings">More Settings</h2>
+            <p data-group="more" data-localize="more_settings_subtitle">Themes, language, interface and everything that isn't about generating.</p>
           </div>
           <button type="button" class="settings-close" onclick="closeSettings()" aria-label="Close" title="Close (Esc)">
             <svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg>
@@ -300,7 +315,7 @@
           <div class="settings-content">
 
             <!-- World -->
-            <section class="settings-section" id="settings-section-world">
+            <section class="settings-section" data-group="gen" id="settings-section-world">
               <header class="settings-section-head">
                 <span class="settings-section-icon" aria-hidden="true"><svg class="icon"><use href="#i-globe"></use></svg></span>
                 <div>
@@ -439,7 +454,7 @@
             </section>
 
             <!-- Generation -->
-            <section class="settings-section" id="settings-section-generation">
+            <section class="settings-section" data-group="gen" id="settings-section-generation">
               <header class="settings-section-head">
                 <span class="settings-section-icon" aria-hidden="true"><svg class="icon"><use href="#i-box"></use></svg></span>
                 <div>
@@ -588,7 +603,7 @@
             </section>
 
             <!-- Terrain & Nature -->
-            <section class="settings-section" id="settings-section-nature">
+            <section class="settings-section" data-group="gen" id="settings-section-nature">
               <header class="settings-section-head">
                 <span class="settings-section-icon" aria-hidden="true"><svg class="icon"><use href="#i-trees"></use></svg></span>
                 <div>
@@ -725,7 +740,7 @@
             </section>
 
             <!-- Building Facades -->
-            <section class="settings-section" id="settings-section-facades">
+            <section class="settings-section" data-group="gen" id="settings-section-facades">
               <header class="settings-section-head">
                 <span class="settings-section-icon" aria-hidden="true"><svg class="icon"><use href="#i-brick-wall"></use></svg></span>
                 <div>
@@ -849,7 +864,7 @@
             </section>
 
             <!-- Gameplay -->
-            <section class="settings-section" id="settings-section-gameplay">
+            <section class="settings-section" data-group="gen" id="settings-section-gameplay">
               <header class="settings-section-head">
                 <span class="settings-section-icon" aria-hidden="true"><svg class="icon"><use href="#i-gamepad"></use></svg></span>
                 <div>
@@ -969,7 +984,7 @@
             </section>
 
             <!-- Map & Input -->
-            <section class="settings-section" id="settings-section-map">
+            <section class="settings-section" data-group="gen" id="settings-section-map">
               <header class="settings-section-head">
                 <span class="settings-section-icon" aria-hidden="true"><svg class="icon"><use href="#i-map"></use></svg></span>
                 <div>
@@ -1068,49 +1083,16 @@
             </section>
 
             <!-- Application -->
-            <section class="settings-section" id="settings-section-application">
+            <section class="settings-section" data-group="gen" id="settings-section-folders">
               <header class="settings-section-head">
-                <span class="settings-section-icon" aria-hidden="true"><svg class="icon"><use href="#i-monitor"></use></svg></span>
+                <span class="settings-section-icon" aria-hidden="true"><svg class="icon"><use href="#i-folder"></use></svg></span>
                 <div>
-                  <h3 data-localize="settings_section_application">Application</h3>
-                  <p data-localize="settings_section_application_desc">Where worlds are saved and how Arnis itself behaves.</p>
+                  <h3 data-localize="settings_section_folders">Save Folders</h3>
+                  <p data-localize="settings_section_folders_desc">Where the generated worlds are saved.</p>
                 </div>
               </header>
 
               <div class="setting-grid">
-                <div class="settings-row setting-tile is-wide">
-                  <label for="language-select" class="setting-label">
-                    <svg class="icon setting-icon" aria-hidden="true"><use href="#i-languages"></use></svg>
-                    <span class="setting-text">
-                      <span class="setting-heading"><span data-localize="language">Language</span></span>
-                      <span class="setting-desc" data-localize="language_desc">Language of the Arnis interface.</span>
-                    </span>
-                  </label>
-                  <div class="settings-control">
-                    <select id="language-select" name="language-select" class="settings-select">
-                      <option value="en">English</option>
-                      <option value="de">Deutsch</option>
-                      <option value="es">Español</option>
-                      <option value="fr-FR">Français</option>
-                      <option value="ru">Русский</option>
-                      <option value="zh-CN">中文 (简体)</option>
-                      <option value="ko">한국어</option>
-                      <option value="pt-BR">Português (Brasil)</option>
-                      <option value="pl">Polski</option>
-                      <option value="sl">Slovenščina</option>
-                      <option value="lv">Latviešu</option>
-                      <option value="sv">Svenska</option>
-                      <option value="ar">العربية</option>
-                      <option value="fi">Suomi</option>
-                      <option value="hu">Magyar</option>
-                      <option value="lt">Lietuvių</option>
-                      <option value="ua">Українська</option>
-                      <option value="ja">日本語</option>
-                      <option value="ro">Română</option>
-                    </select>
-                  </div>
-                </div>
-
                 <div class="settings-row setting-tile is-wide">
                   <label for="save-path-input" class="setting-label">
                     <svg class="icon setting-icon" aria-hidden="true"><use href="#i-folder"></use></svg>
@@ -1146,7 +1128,6 @@
                   </div>
                 </div>
 
-                <!-- Only shown while Luanti is enabled under Advanced -->
                 <div class="settings-row setting-tile is-wide" id="luanti-save-path-row">
                   <label for="luanti-save-path-input" class="setting-label">
                     <svg class="icon setting-icon" aria-hidden="true"><use href="#i-folder"></use></svg>
@@ -1163,41 +1144,11 @@
                   </div>
                 </div>
 
-                <div class="settings-row setting-tile">
-                  <label for="telemetry-toggle" class="setting-label">
-                    <svg class="icon setting-icon" aria-hidden="true"><use href="#i-shield"></use></svg>
-                    <span class="setting-text">
-                      <span class="setting-heading"><span data-localize="anonymous_crash_reports">Anonymous Crash Reports</span></span>
-                      <span class="setting-desc" data-localize="anonymous_crash_reports_desc">Send anonymous crash data to help improve Arnis.</span>
-                    </span>
-                  </label>
-                  <div class="settings-control">
-                    <input type="checkbox" class="switch" id="telemetry-toggle" name="telemetry-toggle">
-                  </div>
-                </div>
-
-                <!-- Tile and facade cache, with how much disk it holds -->
-                <div class="settings-row setting-tile">
-                  <label for="clear-cache-button" class="setting-label">
-                    <svg class="icon setting-icon" aria-hidden="true"><use href="#i-hard-drive"></use></svg>
-                    <span class="setting-text">
-                      <span class="setting-heading">
-                        <span data-localize="clear_tile_cache">Clear Cache</span>
-                        <span class="tooltip-icon" data-tooltip="Deletes all cached map tiles and facade textures to free the space shown. They are downloaded again when needed.">?</span>
-                      </span>
-                      <span class="setting-desc" data-localize="clear_tile_cache_desc">Delete cached map tiles and facade textures.</span>
-                    </span>
-                  </label>
-                  <div class="settings-control cache-control">
-                    <span id="cache-size" class="cache-size"></span>
-                    <button type="button" id="clear-cache-button" class="clear-cache-button" data-localize="clear_tile_cache_button">Clear</button>
-                  </div>
-                </div>
               </div>
             </section>
 
             <!-- Advanced -->
-            <section class="settings-section" id="settings-section-advanced">
+            <section class="settings-section" data-group="gen" id="settings-section-advanced">
               <header class="settings-section-head">
                 <span class="settings-section-icon" aria-hidden="true"><svg class="icon"><use href="#i-sliders"></use></svg></span>
                 <div>
@@ -1303,8 +1254,99 @@
             </section>
 
             <!-- About -->
+            <!-- Aplicación e interfaz (Más ajustes) -->
+            <section class="settings-section" data-group="more" id="settings-section-application">
+              <header class="settings-section-head">
+                <span class="settings-section-icon" aria-hidden="true"><svg class="icon"><use href="#i-monitor"></use></svg></span>
+                <div>
+                  <h3 data-localize="settings_section_application">Application</h3>
+                  <p data-localize="settings_section_interface_desc">Language, interface and how Arnis itself behaves.</p>
+                </div>
+              </header>
+
+              <div class="setting-grid">
+                <div class="settings-row setting-tile is-wide">
+                  <label for="language-select" class="setting-label">
+                    <svg class="icon setting-icon" aria-hidden="true"><use href="#i-languages"></use></svg>
+                    <span class="setting-text">
+                      <span class="setting-heading"><span data-localize="language">Language</span></span>
+                      <span class="setting-desc" data-localize="language_desc">Language of the Arnis interface.</span>
+                    </span>
+                  </label>
+                  <div class="settings-control">
+                    <select id="language-select" name="language-select" class="settings-select">
+                      <option value="en">English</option>
+                      <option value="de">Deutsch</option>
+                      <option value="es">Español</option>
+                      <option value="fr-FR">Français</option>
+                      <option value="ru">Русский</option>
+                      <option value="zh-CN">中文 (简体)</option>
+                      <option value="ko">한국어</option>
+                      <option value="pt-BR">Português (Brasil)</option>
+                      <option value="pl">Polski</option>
+                      <option value="sl">Slovenščina</option>
+                      <option value="lv">Latviešu</option>
+                      <option value="sv">Svenska</option>
+                      <option value="ar">العربية</option>
+                      <option value="fi">Suomi</option>
+                      <option value="hu">Magyar</option>
+                      <option value="lt">Lietuvių</option>
+                      <option value="ua">Українська</option>
+                      <option value="ja">日本語</option>
+                      <option value="ro">Română</option>
+                    </select>
+                  </div>
+                </div>
+
+                <!-- Only shown while Luanti is enabled under Advanced -->
+                <div class="settings-row setting-tile">
+                  <label for="telemetry-toggle" class="setting-label">
+                    <svg class="icon setting-icon" aria-hidden="true"><use href="#i-shield"></use></svg>
+                    <span class="setting-text">
+                      <span class="setting-heading"><span data-localize="anonymous_crash_reports">Anonymous Crash Reports</span></span>
+                      <span class="setting-desc" data-localize="anonymous_crash_reports_desc">Send anonymous crash data to help improve Arnis.</span>
+                    </span>
+                  </label>
+                  <div class="settings-control">
+                    <input type="checkbox" class="switch" id="telemetry-toggle" name="telemetry-toggle">
+                  </div>
+                </div>
+
+                <!-- Tile and facade cache, with how much disk it holds -->
+                <div class="settings-row setting-tile">
+                  <label for="clear-cache-button" class="setting-label">
+                    <svg class="icon setting-icon" aria-hidden="true"><use href="#i-hard-drive"></use></svg>
+                    <span class="setting-text">
+                      <span class="setting-heading">
+                        <span data-localize="clear_tile_cache">Clear Cache</span>
+                        <span class="tooltip-icon" data-tooltip="Deletes all cached map tiles and facade textures to free the space shown. They are downloaded again when needed.">?</span>
+                      </span>
+                      <span class="setting-desc" data-localize="clear_tile_cache_desc">Delete cached map tiles and facade textures.</span>
+                    </span>
+                  </label>
+                  <div class="settings-control cache-control">
+                    <span id="cache-size" class="cache-size"></span>
+                    <button type="button" id="clear-cache-button" class="clear-cache-button" data-localize="clear_tile_cache_button">Clear</button>
+                  </div>
+                </div>
+                <!-- Interfaz: animaciones (js/main.js, clase reduce-motion en el body) -->
+                <div class="settings-row setting-tile">
+                  <label for="reduce-motion-toggle" class="setting-label">
+                    <svg class="icon setting-icon" aria-hidden="true"><use href="#i-sparkles"></use></svg>
+                    <span class="setting-text">
+                      <span class="setting-heading"><span data-localize="reduce_motion">Reduce Animations</span></span>
+                      <span class="setting-desc" data-localize="reduce_motion_desc">Turns off the interface animations and transitions.</span>
+                    </span>
+                  </label>
+                  <div class="settings-control">
+                    <input type="checkbox" class="switch" id="reduce-motion-toggle" name="reduce-motion-toggle">
+                  </div>
+                </div>
+              </div>
+            </section>
+
             <!-- Temas e íconos de temporada (js/season.js) -->
-            <section class="settings-section" id="settings-section-season">
+            <section class="settings-section" data-group="more" id="settings-section-season">
               <header class="settings-section-head">
                 <span class="settings-section-icon" aria-hidden="true"><svg class="icon"><use href="#i-sparkles"></use></svg></span>
                 <div>
@@ -1343,7 +1385,7 @@
               <p class="season-soon">🎃 Halloween llega en la próxima actualización. Las demás temporadas ya tienen sus decoraciones e íconos.</p>
             </section>
 
-            <section class="settings-section" id="settings-section-about">
+            <section class="settings-section" data-group="more" id="settings-section-about">
               <header class="settings-section-head">
                 <span class="settings-section-icon" aria-hidden="true"><svg class="icon"><use href="#i-info"></use></svg></span>
                 <div>

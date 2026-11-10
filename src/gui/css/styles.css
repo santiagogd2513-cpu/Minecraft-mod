@@ -851,3 +851,27 @@ input[type="range"] {
     opacity: 1;
   }
 }
+
+/* El engranaje queda en medio; el de «Más ajustes» (engranaje con un +) cierra la esquina. */
+html:not(.arnis-android) .settings-button:not(.more-settings-button) {
+  border-radius: 0 !important;
+}
+
+.more-settings-button {
+  position: relative;
+}
+
+.more-settings-button .more-plus {
+  position: absolute;
+  right: 5px;
+  bottom: 6px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #a878ff, #5aa0ff);
+  color: #fff;
+  font: 700 12px/14px system-ui, sans-serif;
+  text-align: center;
+  box-shadow: 0 0 0 2px rgba(20, 22, 30, 0.9);
+  pointer-events: none;
+}

@@ -1190,9 +1190,19 @@ function initSettings() {
   let focusBeforeSettings = null;
 
   // Open the settings page
-  function openSettings() {
+  // Una sola página con dos modos: «gen» (lo de la generación, el engranaje) y
+  // «more» (Más ajustes: temas, idioma, interfaz, acerca de). CSS esconde lo
+  // del otro modo según data-mode.
+  function openSettings(mode) {
+    const next = mode === "more" ? "more" : "gen";
+    const changed = settingsModal.dataset.mode !== next;
+    settingsModal.dataset.mode = next;
     focusBeforeSettings = document.activeElement;
     settingsModal.style.display = "flex";
+    if (changed) {
+      const scroller = settingsModal.querySelector(".settings-scrollable");
+      if (scroller) scroller.scrollTop = 0;
+    }
     syncSettingsLayout();
     // Focus moves onto the page, so Tab and the arrow keys act on it rather
     // than on the map behind it.
@@ -1235,7 +1245,22 @@ function initSettings() {
     }
   });
 
-  window.openSettings = openSettings;
+  window.openSettings = () => openSettings("gen");
+  window.openMoreSettings = () => openSettings("more");
+
+  // Reducir animaciones (Más ajustes → Aplicación)
+  (function initReduceMotion() {
+    const toggle = document.getElementById("reduce-motion-toggle");
+    let on = false;
+    try { on = localStorage.getItem("arnis-reduce-motion") === "1"; } catch (e) {}
+    document.body.classList.toggle("reduce-motion", on);
+    if (!toggle) return;
+    toggle.checked = on;
+    toggle.addEventListener("change", () => {
+      document.body.classList.toggle("reduce-motion", toggle.checked);
+      try { localStorage.setItem("arnis-reduce-motion", toggle.checked ? "1" : "0"); } catch (e) {}
+    });
+  })();
   window.closeSettings = closeSettings;
 
   // Mirrors OBJECT_SKIP_SCALE in src/args.rs

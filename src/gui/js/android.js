@@ -437,14 +437,24 @@
     const chips = document.createElement("div");
     chips.className = "quick-chips";
     buildChips(chips);
-    const gear = document.querySelector(".settings-button");
+    // ⚙ Ajustes (lo de la generación) y, al lado, Más ajustes (temas, idioma, interfaz, acerca de)
+    const gear = document.querySelector(".settings-button:not(.more-settings-button)");
     if (gear) {
       gear.classList.add("quick-chip", "android-more");
       const label = document.createElement("span");
       label.className = "quick-chip-label";
-      label.textContent = "Más ajustes";
+      label.textContent = "Ajustes";
       gear.appendChild(label);
       chips.appendChild(gear);
+    }
+    const more = document.querySelector(".more-settings-button");
+    if (more) {
+      more.classList.add("quick-chip", "android-more");
+      const label = document.createElement("span");
+      label.className = "quick-chip-label";
+      label.textContent = "Más ajustes";
+      more.appendChild(label);
+      chips.appendChild(more);
     }
 
     // 3. Area details

@@ -48,16 +48,27 @@ function setActive(index) {
   });
 }
 
+// The page has two modes (generation / more settings); the sections of the
+// other mode are hidden and must not take the highlight.
+function visible(section) {
+  return !!section && section.offsetParent !== null;
+}
+
+function firstVisible() {
+  const i = sections.findIndex(visible);
+  return i < 0 ? 0 : i;
+}
+
 function currentSectionIndex() {
   // At the very bottom the last section is the one being read, even when it
   // is too short to reach the top.
   if (scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 2) {
-    return sections.length - 1;
+    for (let i = sections.length - 1; i >= 0; i--) if (visible(sections[i])) return i;
   }
   const top = scroller.getBoundingClientRect().top + SPY_OFFSET_PX;
-  let index = 0;
+  let index = firstVisible();
   sections.forEach((section, i) => {
-    if (section.getBoundingClientRect().top <= top) index = i;
+    if (visible(section) && section.getBoundingClientRect().top <= top) index = i;
   });
   return index;
 }

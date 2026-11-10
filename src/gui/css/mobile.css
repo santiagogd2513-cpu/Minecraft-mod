@@ -822,3 +822,15 @@
   filter: grayscale(0.6);
   pointer-events: auto;
 }
+
+/* ⚙ Ajustes y Más ajustes: juntos en su propia fila, cada uno de doble ancho */
+.arnis-android .controls-box button.quick-chip.android-more {
+  grid-column: span 2;
+  position: relative;
+}
+
+.arnis-android .more-settings-button .more-plus {
+  right: 10px;
+  top: 8px;
+  bottom: auto;
+}

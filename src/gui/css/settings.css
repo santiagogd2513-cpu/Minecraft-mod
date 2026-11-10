@@ -982,3 +982,23 @@ label[for].setting-label {
     transition: none !important;
   }
 }
+
+/* Dos páginas en una: ⚙ (generación) y Más ajustes. Se esconde lo del otro modo. */
+#settings-modal[data-mode="gen"] [data-group="more"],
+#settings-modal[data-mode="more"] [data-group="gen"] {
+  display: none !important;
+}
+
+#settings-modal[data-mode="more"] .settings-topbar-icon {
+  background: linear-gradient(135deg, rgba(168, 120, 255, 0.28), rgba(90, 160, 255, 0.22));
+}
+
+/* Reducir animaciones */
+body.reduce-motion *,
+body.reduce-motion *::before,
+body.reduce-motion *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}

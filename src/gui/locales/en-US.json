@@ -259,5 +259,14 @@
   "discord_modal_title": "Join the Arnis Discord",
   "discord_modal_text": "Enjoying Arnis? Join our Discord to show off your worlds, get help and see what's coming next.",
   "discord_modal_dismiss": "No thanks",
-  "discord_modal_join": "Join Discord"
+  "discord_modal_join": "Join Discord",
+  "settings_section_folders": "Save Folders",
+  "settings_nav_folders": "Java, Bedrock, Luanti",
+  "settings_section_folders_desc": "Where the generated worlds are saved.",
+  "settings_nav_interface": "Language, interface, cache",
+  "settings_section_interface_desc": "Language, interface and how Arnis itself behaves.",
+  "reduce_motion": "Reduce Animations",
+  "reduce_motion_desc": "Turns off the interface animations and transitions.",
+  "more_settings": "More Settings",
+  "more_settings_subtitle": "Themes, language, interface and everything that isn't about generating."
 }
