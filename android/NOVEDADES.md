@@ -1,3 +1,5 @@
+- **🔎 Buscador más fácil de leer y de distinguir:** cada resultado ahora trae la **foto** del lugar (de Wikipedia, cuando tiene) o un **ícono** según lo que es, el nombre y el lugar más grandes, un gris más claro para la línea de abajo y una etiqueta de color con el **tipo** (Ciudad, Centro comercial, Edificio, Pueblo, Montaña…). Así se distinguen los lugares que se llaman igual.
+- Las fotos llegan después de los resultados, y no demoran la búsqueda. Para pedirlas, la app le manda a Wikipedia solo el nombre del lugar.
 - **⭐ Menú de Forja Estudios:** al tocar la tarjeta de Forja Estudios en «Acerca de» sale un menú con Contáctanos (muy pronto), Calificar apps (abre la página web) y Acerca del estudio.
 - **📍 Los lugares chicos se seleccionan solos:** si buscas un pueblo, una plaza, una torre, unas pirámides o un cerro (de hasta 25 km de lado), al tocar el resultado Arnis selecciona toda el área del lugar, sin que tengas que dibujarla. Los resultados que hacen eso dicen «selects the area».
 - **Edificios sueltos:** si el lugar es muy chiquito (un solo edificio), se le da un área de al menos 500 m de lado para que haya algo alrededor.

@@ -137,6 +137,78 @@ var citySearch = {
         return [s, w, n, e];
     },
 
+    /** Tipo de lugar en palabras normales, con su emoji y un color, para distinguir dos lugares que se llaman igual. */
+    typeInfo: function(r) {
+        var c = r.class || '', t = r.type || '';
+        var T = function(key, es, emoji, color) { return { label: window.mapText(key, es), emoji: emoji, color: color }; };
+        if (c === 'boundary' || c === 'place') {
+            if (/^(city|town|municipality)$/.test(t) || t === 'administrative') return T('map_type_city', 'City or town', '\ud83c\udfd9\ufe0f', '#4c9dff');
+            if (/^(village|hamlet|isolated_dwelling)$/.test(t)) return T('map_type_village', 'Village', '\ud83c\udfd8\ufe0f', '#6fd36f');
+            if (/^(suburb|neighbourhood|quarter|borough)$/.test(t)) return T('map_type_hood', 'Neighborhood', '\ud83c\udfe1', '#ffb547');
+            if (/^(state|region|county|province)$/.test(t)) return T('map_type_region', 'Region', '\ud83d\uddfa\ufe0f', '#b47cff');
+            if (t === 'country') return T('map_type_country', 'Country', '\ud83c\udf0e', '#ff6b8a');
+            return T('map_type_place', 'Place', '\ud83d\udccd', '#9aa4c0');
+        }
+        if (c === 'shop' && t === 'mall') return T('map_type_mall', 'Shopping mall', '\ud83d\udecd\ufe0f', '#ff8a3d');
+        if (c === 'tourism') return T('map_type_tourism', 'Tourist spot', '\ud83c\udfa1', '#ff6b8a');
+        if (c === 'historic') return T('map_type_historic', 'Historic site', '\ud83c\udfdb\ufe0f', '#d9a84e');
+        if (c === 'natural') return T(/peak|volcano|hill/.test(t) ? 'map_type_mountain' : 'map_type_natural', /peak|volcano|hill/.test(t) ? 'Mountain' : 'Nature', /peak|volcano|hill/.test(t) ? '\u26f0\ufe0f' : '\ud83c\udf3f', '#6fd36f');
+        if (c === 'leisure') return T('map_type_park', 'Park', '\ud83c\udf33', '#6fd36f');
+        if (c === 'building') return T('map_type_building', 'Building', '\ud83c\udfe2', '#4c9dff');
+        if (c === 'amenity') return T('map_type_amenity', 'Service', '\ud83c\udfe5', '#5ef0c0');
+        if (c === 'aeroway') return T('map_type_airport', 'Airport', '\u2708\ufe0f', '#36d1ff');
+        if (c === 'railway') return T('map_type_station', 'Station', '\ud83d\ude89', '#b47cff');
+        return T('map_type_place', 'Place', '\ud83d\udccd', '#9aa4c0');
+    },
+
+    thumbCache: {},
+
+    /** Pide la foto del lugar a Wikipedia o Wikidata (gratis y sin cuenta). Si no hay, se queda el emoji. */
+    loadThumb: function(result, $el) {
+        var self = this, x = result.extratags || {};
+        var put = function(url) {
+            if (!url) return;
+            // se carga primero para no dejar un cuadro roto si la imagen falla
+            var img = new Image();
+            img.onload = function() {
+                $el.text('').css('background-image', 'url("' + url + '")').addClass('has-photo');
+            };
+            img.src = url;
+        };
+        var fromSummary = function(lang, title, done) {
+            var key = lang + ':' + title;
+            if (key in self.thumbCache) return done(self.thumbCache[key]);
+            $.ajax({
+                url: 'https://' + lang + '.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(String(title).replace(/ /g, '_')),
+                dataType: 'json', timeout: 6000
+            }).done(function(d) {
+                self.thumbCache[key] = d && d.thumbnail ? d.thumbnail.source : null;
+                done(self.thumbCache[key]);
+            }).fail(function() { done(null); });
+        };
+        var m = x.wikipedia ? String(x.wikipedia).match(/^([a-z-]+):(.+)$/) : null;
+        if (m) {
+            fromSummary(m[1], m[2], put);
+        } else if (x.wikidata && /^Q\d+$/.test(x.wikidata)) {
+            $.ajax({
+                url: 'https://www.wikidata.org/w/api.php',
+                data: { action: 'wbgetentities', ids: x.wikidata, props: 'sitelinks|claims', sitefilter: 'eswiki|enwiki', format: 'json', origin: '*' },
+                dataType: 'json', timeout: 6000
+            }).done(function(d) {
+                var e = d && d.entities && d.entities[x.wikidata];
+                if (!e) return;
+                var p18 = e.claims && e.claims.P18 && e.claims.P18[0] && e.claims.P18[0].mainsnak && e.claims.P18[0].mainsnak.datavalue;
+                if (p18 && p18.value) {
+                    put('https://commons.wikimedia.org/wiki/Special:FilePath/' + encodeURIComponent(p18.value) + '?width=120');
+                } else if (e.sitelinks && e.sitelinks.eswiki) {
+                    fromSummary('es', e.sitelinks.eswiki.title, put);
+                } else if (e.sitelinks && e.sitelinks.enwiki) {
+                    fromSummary('en', e.sitelinks.enwiki.title, put);
+                }
+            });
+        }
+    },
+
     displayResults: function(results) {
         var self = this;
         var $results = $('#search-results');
@@ -148,7 +220,7 @@ var citySearch = {
         }
         
         var html = '';
-        results.forEach(function(result) {
+        results.forEach(function(result, idx) {
             var displayName = result.display_name;
             var nameParts = displayName.split(',');
             var mainName = nameParts[0];
@@ -156,14 +228,22 @@ var citySearch = {
             
             var area = self.areaFor(result);
             var areaAttr = area ? ' data-area="' + area.join(',') + '"' : '';
-            var autoTag = area ? ' · ' + window.mapText('map_search_autoselect', 'selects the area') : '';
-            html += '<div class="search-result-item" data-lat="' + result.lat + '" data-lon="' + result.lon + '"' + areaAttr + '>';
+            var autoTag = area ? ' \u00b7 ' + window.mapText('map_search_autoselect', 'selects the area') : '';
+            var ti = self.typeInfo(result);
+            html += '<div class="search-result-item" data-idx="' + idx + '" data-lat="' + result.lat + '" data-lon="' + result.lon + '"' + areaAttr + '>';
+            html += '<div class="search-result-thumb" data-thumb="' + idx + '" aria-hidden="true">' + ti.emoji + '</div>';
+            html += '<div class="search-result-body">';
             html += '<div class="search-result-name">' + self.escapeHtml(mainName) + '</div>';
             html += '<div class="search-result-details">' + self.escapeHtml(details + autoTag) + '</div>';
-            html += '</div>';
+            html += '<span class="search-result-type" style="--tc:' + ti.color + '">' + self.escapeHtml(ti.label) + '</span>';
+            html += '</div></div>';
         });
         
         $results.html(html).show();
+        // las fotos llegan después, una por una: el resultado ya se puede tocar mientras tanto
+        results.forEach(function(result, idx) {
+            self.loadThumb(result, $results.find('[data-thumb="' + idx + '"]'));
+        });
         
         // Bind click events to results
         $('.search-result-item').on('click', function() {

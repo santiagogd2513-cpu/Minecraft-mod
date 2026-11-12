@@ -268,5 +268,22 @@
   "reduce_motion": "Reducir animaciones",
   "reduce_motion_desc": "Apaga las animaciones y transiciones de la interfaz.",
   "more_settings": "Más ajustes",
-  "more_settings_subtitle": "Temas, idioma, interfaz y todo lo que no es de la generación."
+  "more_settings_subtitle": "Temas, idioma, interfaz y todo lo que no es de la generación.",
+  "map_search_autoselect": "selecciona el área",
+  "map_type_city": "Ciudad o municipio",
+  "map_type_village": "Pueblo",
+  "map_type_hood": "Barrio",
+  "map_type_region": "Región",
+  "map_type_country": "País",
+  "map_type_place": "Lugar",
+  "map_type_mall": "Centro comercial",
+  "map_type_tourism": "Lugar turístico",
+  "map_type_historic": "Lugar histórico",
+  "map_type_natural": "Naturaleza",
+  "map_type_mountain": "Montaña",
+  "map_type_park": "Parque o recreo",
+  "map_type_building": "Edificio",
+  "map_type_amenity": "Servicio",
+  "map_type_airport": "Aeropuerto",
+  "map_type_station": "Estación"
 }

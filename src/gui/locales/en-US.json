@@ -268,5 +268,22 @@
   "reduce_motion": "Reduce Animations",
   "reduce_motion_desc": "Turns off the interface animations and transitions.",
   "more_settings": "More Settings",
-  "more_settings_subtitle": "Themes, language, interface and everything that isn't about generating."
+  "more_settings_subtitle": "Themes, language, interface and everything that isn't about generating.",
+  "map_search_autoselect": "selects the area",
+  "map_type_city": "City or town",
+  "map_type_village": "Village",
+  "map_type_hood": "Neighborhood",
+  "map_type_region": "Region",
+  "map_type_country": "Country",
+  "map_type_place": "Place",
+  "map_type_mall": "Shopping mall",
+  "map_type_tourism": "Tourist spot",
+  "map_type_historic": "Historic site",
+  "map_type_natural": "Nature",
+  "map_type_mountain": "Mountain",
+  "map_type_park": "Park",
+  "map_type_building": "Building",
+  "map_type_amenity": "Service",
+  "map_type_airport": "Airport",
+  "map_type_station": "Station"
 }
