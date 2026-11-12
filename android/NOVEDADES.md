@@ -1,3 +1,4 @@
+- **⭐ Menú de Forja Estudios:** al tocar la tarjeta de Forja Estudios en «Acerca de» sale un menú con Contáctanos (muy pronto), Calificar apps (abre la página web) y Acerca del estudio.
 - **📍 Los lugares chicos se seleccionan solos:** si buscas un pueblo, una plaza, una torre, unas pirámides o un cerro (de hasta 25 km de lado), al tocar el resultado Arnis selecciona toda el área del lugar, sin que tengas que dibujarla. Los resultados que hacen eso dicen «selects the area».
 - **Edificios sueltos:** si el lugar es muy chiquito (un solo edificio), se le da un área de al menos 500 m de lado para que haya algo alrededor.
 - **Ciudades y países:** si el lugar es más grande de 25 km, como antes, solo se acerca el mapa y tú eliges el área.
