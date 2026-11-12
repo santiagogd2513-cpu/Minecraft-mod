@@ -115,6 +115,28 @@ var citySearch = {
         $('#search-results').hide();
     },
     
+    // Places this small are selected as a whole area when picked from the results
+    // (a village, a plaza, a tower, the pyramids…); bigger ones just zoom the map.
+    AUTO_SELECT_MAX_KM: 25,
+    AUTO_SELECT_MIN_KM: 0.5,
+
+    /** [south, west, north, east] to select for a Nominatim result, or null when it is too big or has no box. */
+    areaFor: function(result) {
+        var bb = result && result.boundingbox;
+        if (!bb || bb.length !== 4) return null;
+        var s = parseFloat(bb[0]), n = parseFloat(bb[1]), w = parseFloat(bb[2]), e = parseFloat(bb[3]);
+        if (![s, n, w, e].every(isFinite) || n < s || e < w) return null;   // e < w: crosses the antimeridian, leave it
+        var midLat = (s + n) / 2, kmLat = 111.32, kmLon = 111.32 * Math.cos(midLat * Math.PI / 180);
+        var h = (n - s) * kmLat, wd = (e - w) * kmLon;
+        if (Math.max(h, wd) > this.AUTO_SELECT_MAX_KM) return null;
+        // a single building comes with a box of a few meters: give it some surroundings
+        var min = this.AUTO_SELECT_MIN_KM;
+        if (h < min) { var dl = (min - h) / 2 / kmLat; s -= dl; n += dl; }
+        if (wd < min && kmLon > 0) { var dn = (min - wd) / 2 / kmLon; w -= dn; e += dn; }
+        if (s < -90 || n > 90 || w < -180 || e > 180) return null;
+        return [s, w, n, e];
+    },
+
     displayResults: function(results) {
         var self = this;
         var $results = $('#search-results');
@@ -132,9 +154,12 @@ var citySearch = {
             var mainName = nameParts[0];
             var details = nameParts.slice(1, 3).join(',');
             
-            html += '<div class="search-result-item" data-lat="' + result.lat + '" data-lon="' + result.lon + '">';
+            var area = self.areaFor(result);
+            var areaAttr = area ? ' data-area="' + area.join(',') + '"' : '';
+            var autoTag = area ? ' · ' + window.mapText('map_search_autoselect', 'selects the area') : '';
+            html += '<div class="search-result-item" data-lat="' + result.lat + '" data-lon="' + result.lon + '"' + areaAttr + '>';
             html += '<div class="search-result-name">' + self.escapeHtml(mainName) + '</div>';
-            html += '<div class="search-result-details">' + self.escapeHtml(details) + '</div>';
+            html += '<div class="search-result-details">' + self.escapeHtml(details + autoTag) + '</div>';
             html += '</div>';
         });
         
@@ -146,12 +171,14 @@ var citySearch = {
             var lon = parseFloat($(this).data('lon'));
             var name = $(this).find('.search-result-name').text();
             
-            self.goToLocation(lat, lon, name);
+            var areaStr = $(this).attr('data-area');
+            var area = areaStr ? areaStr.split(',').map(parseFloat) : null;
+            self.goToLocation(lat, lon, name, area);
             self.hideResults();
         });
     },
     
-    goToLocation: function(lat, lon, name) {
+    goToLocation: function(lat, lon, name, area) {
         if (typeof map !== 'undefined' && map) {
             // Clear existing bbox selection and spawn points
             if (typeof drawnItems !== 'undefined' && drawnItems) {
@@ -184,8 +211,15 @@ var citySearch = {
                 }
             }
             
-            // Simply zoom to location without adding markers or popups
-            map.setView([lat, lon], 12);
+            if (area && area.length === 4 && area.every(isFinite)) {
+                // A small place: select all of it. Same path as the bbox typed into the parent
+                // window, which also frames the map on the area and tells the parent about it.
+                var lyr = new L.Rectangle(new L.LatLngBounds([area[0], area[1]], [area[2], area[3]]));
+                map.fire('draw:created', { layer: lyr, layerType: 'polygon' });
+            } else {
+                // Simply zoom to location without adding markers or popups
+                map.setView([lat, lon], 12);
+            }
             
             // Clear search box
             $('#city-search').val('');

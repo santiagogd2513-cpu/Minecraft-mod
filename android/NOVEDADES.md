@@ -1,4 +1,4 @@
-- **💘 San Valentín (1 al 14 de febrero):** corazones que suben flotando sobre el mapa y una guirnalda de corazones que laten arriba del panel de abajo.
-- **🤝 Amor y Amistad (todo septiembre):** confeti, corazones y estrellitas de colores que caen girando, y banderines de fiesta que ondean.
-- **Íconos nuevos:** en San Valentín el pin se vuelve un corazón con la flecha de Cupido, y en Amor y Amistad el mundo trae un regalito de amigo secreto con confeti.
-- ¿Quieres verlos ya? Ajustes → Temas de temporada → toca el nombre y elige San Valentín o Amor y Amistad.
+- **📍 Los lugares chicos se seleccionan solos:** si buscas un pueblo, una plaza, una torre, unas pirámides o un cerro (de hasta 25 km de lado), al tocar el resultado Arnis selecciona toda el área del lugar, sin que tengas que dibujarla. Los resultados que hacen eso dicen «selects the area».
+- **Edificios sueltos:** si el lugar es muy chiquito (un solo edificio), se le da un área de al menos 500 m de lado para que haya algo alrededor.
+- **Ciudades y países:** si el lugar es más grande de 25 km, como antes, solo se acerca el mapa y tú eliges el área.
+- Si el área elegida es muy grande para generar, Arnis te avisa con el mensaje de siempre (amarillo o rojo).
